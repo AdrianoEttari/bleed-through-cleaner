@@ -169,3 +169,23 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Files
+*.DS_Store
+GMM_bleed_through_cleaner.py
+LIBRI_DA_FARE.txt
+MAIN_CLEANER.py
+quantitative_evaluation.py
+LAUNCHER.sh
+
+# Folders
+assets/
+dataset_text_extraction_patches/
+DIBCO_DATA/
+DIBCO_DATA_patches_ALL*/
+Firenze_BibliotecaMediceaLaurenziana_Plut_40_1*/
+Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino*/
+ornament_detection_data/
+page_detection_data/
+READ-BAD/
+

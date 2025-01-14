@@ -6,31 +6,13 @@ Ancient manuscripts suffer from aging problems, due to chemical agents, humidity
 
 Our bleed-through minimization approach works without the alignment technique (no registration of the pages). It is based on the segmentation of different components within a page, with a further denoising algorithm to detect and reject the bleed-through presence, preserving all the rest.
 
-<img src="assets/workflow_diagram.png" height="300px"/>
+In the following figure it is shown a diagram of the main steps of our approach.
+<img src="assets/workflow_diagram.png" height="500px"/>
 
-<img src="assets/bleed_through_example_1.png" height="500px"/>
-<img src="assets/bleed_through_example_2.png" height="500px"/>
+The following image shows on the left side the original page and on the right side the cleaned page. The bleed-through is removed and the text is preserved.
+Click on it so that you can move the slider to better appreciate the results.
 
-## RESULTS
-
-### 
-
-[<img src="assets/imgsli_up42.png" height="400px"/>](https://imgsli.com/Mjc2NjAw)
-
-Here is a 25 seconds video showcasing the denoising process for the super resolution problem of the Sentinel-2 dataset:
-
-![Video Denoising](https://github.com/AdrianoEttari/DiffusionRemoteSensing/blob/main/assets/UP42_SUPERRESOLUTION/DownBlur/up42_superresolution.gif)
-
-### IMAGE GENERATION of https://github.com/phelber/EuroSAT. 
-The first set of images is the real one and the second set is the generated one.
-
-<img src="assets/EuroSat_real.png" height="250px"/>
-<img src="assets/EuroSat_predictions.png" height="265px"/>
-
-
-## Train (snippet to train a)
-```
-```
+[<img src="assets/imgsli_bleed_through_cleaner.png" height="500px"/>](https://imgsli.com/MzM4MjA4)
 
 ## Contact
 If you have any questions, feel free to contact me at `adriano.ettari@unina.it` or on my LinkedIn page [![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5.svg?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/adriano-ettari-b8741b21b/)

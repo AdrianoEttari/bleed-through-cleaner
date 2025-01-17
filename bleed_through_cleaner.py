@@ -233,7 +233,7 @@ class bleed_through_cleaner:
         '''
         patch_size = 400
         stride = 100
-
+        import ipdb; ipdb.set_trace()
         if page_extraction_model_name:
             page_filtered_image, mask_page = self.page_extract(page_extraction_model_name)
         
@@ -649,16 +649,16 @@ if __name__ == "__main__":
     # img_names = os.listdir(os.path.join('Bleed_Through_Database', 'rgb'))
     # img_names = ['CNMD0000263308_0021_Carta_8r.jpg', 'CNMD0000263308_0459_Carta_227r.jpg', 'CNMD0000263308_0179_Carta_87r.jpg', 
     #              'CNMD0000263308_0170_Carta_82v.jpg', "CNMD0000263308_0048_Carta_21v.jpg"]
-    img_names = ["CNMD0000263308_0111_Carta_53r.jpg", "CNMD0000263308_0287_Carta_141r.jpg", "CNMD0000263308_0288_Carta_141v.jpg", "CNMD0000263308_0303_Carta_149r.jpg",
-                 "CNMD0000263308_0324_Carta_159v.jpg"]
+    img_names = os.listdir(os.path.join("4C1_PALLADIUS_FUSCUS"))
 
     for img_name in img_names:
     
         # image_path = os.path.join('DIBCO_DATA','test','DIBCO2014',img_name)
         # image_path = os.path.join('DIBCO_DATA','DIBCO2017',img_name)
         # image_path = os.path.join(os.path.join('Bleed_Through_Database', 'rgb', img_name))
-        image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
+        # image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
         # image_path = os.path.join("Firenze_BibliotecaMediceaLaurenziana_Plut_40_1", img_name)
+        image_path = os.path.join("4C1_PALLADIUS_FUSCUS", img_name)
     
         models_folder_path = 'models'
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -667,9 +667,9 @@ if __name__ == "__main__":
 
         cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
 
-        save_folder_path = 'cleaned_napoli_new'
+        # save_folder_path = 'cleaned_napoli_new'
         # save_folder_path = os.path.join('Bleed_Through_Database', 'cleaned_rgb')
-        # save_folder_path = '.'
+        save_folder_path = '4C1_PALLADIUS_FUSCUS_cleaned'
         # save_folder_path = "DIBCO_2017_pred"
 
         mask_page_folder_path = save_folder_path # Use None if you don't want to save the mask and the page
@@ -680,14 +680,14 @@ if __name__ == "__main__":
         # page_extraction_model_name = None
         page_extraction_model_name = "Residual_attention_UNet_page_extraction"
 
-        cleaned_image = cleaner.median_image_inpainting(save_folder_path_mask_page = mask_page_folder_path,
-                                                                    ornament_model_name=ornament_model_name,
-                                                                    text_model_name=text_model_name,
-                                                                    page_extraction_model_name = page_extraction_model_name
-                                                                    )
-        # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_median.png'
-        new_name = f'{img_name}_median.png'
-        Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+        # cleaned_image = cleaner.median_image_inpainting(save_folder_path_mask_page = mask_page_folder_path,
+        #                                                             ornament_model_name=ornament_model_name,
+        #                                                             text_model_name=text_model_name,
+        #                                                             page_extraction_model_name = page_extraction_model_name
+        #                                                             )
+        # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_median.png'
+        # new_name = f'{img_name}_median.png'
+        # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
         # cleaned_image = cleaner.biweight_image_inpainting(ornament_model_name=ornament_model_name,
         #                                                            text_model_name=text_model_name,

@@ -46,7 +46,7 @@ class bleed_through_cleaner:
         mask_page = model_page_extractor(input_image_rescaled_tensor)[0].permute(1,2,0).squeeze(2).detach().cpu().numpy()
 
         otsu_mask_page = otsu_thresholding(mask_page) 
-
+        import ipdb; ipdb.set_trace()
         # cv2.morphologyEx with cv2.MORPH_OPEN performs opening (erosion followed by dilation)
         # which is useful to remove noise.
         kernel = np.ones((5,5),np.uint8)
@@ -162,7 +162,7 @@ class bleed_through_cleaner:
         # final_pred = final_pred.filter(ImageFilter.GaussianBlur(radius=1.5))
 
         ornament_mask = final_pred[0].permute(1,2,0).detach().cpu().numpy()[:,:,0] # it has 3 channels but they are the same
-
+        import ipdb; ipdb.set_trace()
         # For the ornament mask is better to use the classic thresholding instead of using the otsu thresholding (empirical motivation).
         threshold_ornament_mask = ornament_mask > 0.6  
         threshold_ornament_mask = threshold_ornament_mask.astype(np.uint8)  
@@ -202,7 +202,7 @@ class bleed_through_cleaner:
         # final_pred = Image.fromarray(final_pred.astype(np.uint8))
         # final_pred = final_pred.filter(ImageFilter.GaussianBlur(radius=1.5))
         # text_mask = np.array(final_pred)
-
+        import ipdb; ipdb.set_trace()
         text_mask = final_pred[0].permute(1,2,0).detach().cpu().numpy()[:,:,0]*255 # it has 3 channels but they are the same
         text_mask = text_mask.astype(np.uint8)
    
@@ -233,7 +233,6 @@ class bleed_through_cleaner:
         '''
         patch_size = 400
         stride = 100
-        import ipdb; ipdb.set_trace()
         if page_extraction_model_name:
             page_filtered_image, mask_page = self.page_extract(page_extraction_model_name)
         
@@ -649,16 +648,17 @@ if __name__ == "__main__":
     # img_names = os.listdir(os.path.join('Bleed_Through_Database', 'rgb'))
     # img_names = ['CNMD0000263308_0021_Carta_8r.jpg', 'CNMD0000263308_0459_Carta_227r.jpg', 'CNMD0000263308_0179_Carta_87r.jpg', 
     #              'CNMD0000263308_0170_Carta_82v.jpg', "CNMD0000263308_0048_Carta_21v.jpg"]
-    img_names = os.listdir(os.path.join("4C1_PALLADIUS_FUSCUS"))
+    # img_names = os.listdir(os.path.join("4C1_PALLADIUS_FUSCUS"))
+    img_names = []
 
     for img_name in img_names:
     
         # image_path = os.path.join('DIBCO_DATA','test','DIBCO2014',img_name)
         # image_path = os.path.join('DIBCO_DATA','DIBCO2017',img_name)
         # image_path = os.path.join(os.path.join('Bleed_Through_Database', 'rgb', img_name))
-        # image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
+        image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
         # image_path = os.path.join("Firenze_BibliotecaMediceaLaurenziana_Plut_40_1", img_name)
-        image_path = os.path.join("4C1_PALLADIUS_FUSCUS", img_name)
+        # image_path = os.path.join("4C1_PALLADIUS_FUSCUS", img_name)
     
         models_folder_path = 'models'
         device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -668,8 +668,9 @@ if __name__ == "__main__":
         cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
 
         # save_folder_path = 'cleaned_napoli_new'
+        save_folder_path = 'assets'
         # save_folder_path = os.path.join('Bleed_Through_Database', 'cleaned_rgb')
-        save_folder_path = '4C1_PALLADIUS_FUSCUS_cleaned'
+        # save_folder_path = '4C1_PALLADIUS_FUSCUS_cleaned'
         # save_folder_path = "DIBCO_2017_pred"
 
         mask_page_folder_path = save_folder_path # Use None if you don't want to save the mask and the page

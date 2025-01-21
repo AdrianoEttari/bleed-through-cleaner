@@ -46,12 +46,11 @@ class bleed_through_cleaner:
         mask_page = model_page_extractor(input_image_rescaled_tensor)[0].permute(1,2,0).squeeze(2).detach().cpu().numpy()
 
         otsu_mask_page = otsu_thresholding(mask_page) 
-        import ipdb; ipdb.set_trace()
+
         # cv2.morphologyEx with cv2.MORPH_OPEN performs opening (erosion followed by dilation)
         # which is useful to remove noise.
         kernel = np.ones((5,5),np.uint8)
         otsu_mask_cleaned = cv2.morphologyEx(otsu_mask_page, cv2.MORPH_OPEN, kernel)
-
         # cv2.connectedComponentsWithStats is used in this case to get stats where there are also the
         # number of pixels for each label found in the image (where labels are the connected components
         # and so if there is a page and a single little agglomerate of pixels not linked to the page, then
@@ -162,13 +161,14 @@ class bleed_through_cleaner:
         # final_pred = final_pred.filter(ImageFilter.GaussianBlur(radius=1.5))
 
         ornament_mask = final_pred[0].permute(1,2,0).detach().cpu().numpy()[:,:,0] # it has 3 channels but they are the same
-        import ipdb; ipdb.set_trace()
+
         # For the ornament mask is better to use the classic thresholding instead of using the otsu thresholding (empirical motivation).
         threshold_ornament_mask = ornament_mask > 0.6  
         threshold_ornament_mask = threshold_ornament_mask.astype(np.uint8)  
         kernel = np.ones((15,15),np.uint8)
         threshold_ornament_mask_cleaned = cv2.morphologyEx(threshold_ornament_mask, cv2.MORPH_OPEN, kernel)
         threshold_ornament_mask_cleaned = cv2.morphologyEx(threshold_ornament_mask_cleaned, cv2.MORPH_CLOSE, kernel)
+
         return 255-threshold_ornament_mask_cleaned*255 # The mask has 0 value for the ornaments and 255 for the background 
 
     def text_detect(self, aggregation_sampling, model_name):
@@ -202,7 +202,7 @@ class bleed_through_cleaner:
         # final_pred = Image.fromarray(final_pred.astype(np.uint8))
         # final_pred = final_pred.filter(ImageFilter.GaussianBlur(radius=1.5))
         # text_mask = np.array(final_pred)
-        import ipdb; ipdb.set_trace()
+
         text_mask = final_pred[0].permute(1,2,0).detach().cpu().numpy()[:,:,0]*255 # it has 3 channels but they are the same
         text_mask = text_mask.astype(np.uint8)
    
@@ -646,10 +646,8 @@ if __name__ == "__main__":
     # img_names = os.listdir(os.path.join('DIBCO_DATA','test','DIBCO2014'))
     # img_names = os.listdir(os.path.join('DIBCO_DATA','DIBCO2017'))
     # img_names = os.listdir(os.path.join('Bleed_Through_Database', 'rgb'))
-    # img_names = ['CNMD0000263308_0021_Carta_8r.jpg', 'CNMD0000263308_0459_Carta_227r.jpg', 'CNMD0000263308_0179_Carta_87r.jpg', 
-    #              'CNMD0000263308_0170_Carta_82v.jpg', "CNMD0000263308_0048_Carta_21v.jpg"]
     # img_names = os.listdir(os.path.join("4C1_PALLADIUS_FUSCUS"))
-    img_names = []
+    img_names = ['CNMD0000263308_0111_Carta_53r.jpg']
 
     for img_name in img_names:
     
@@ -661,8 +659,8 @@ if __name__ == "__main__":
         # image_path = os.path.join("4C1_PALLADIUS_FUSCUS", img_name)
     
         models_folder_path = 'models'
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        # device = 'mps'
+        # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device = 'mps'
         print('Using device:', device)
 
         cleaner = bleed_through_cleaner(image_path, models_folder_path, device)

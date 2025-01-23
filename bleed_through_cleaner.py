@@ -643,11 +643,11 @@ class bleed_through_cleaner:
         return image_to_inpaint
 
 if __name__ == "__main__":
-    img_names = os.listdir(os.path.join('DIBCO_DATA','test','DIBCO2014'))
+    # img_names = os.listdir(os.path.join('DIBCO_DATA','test','DIBCO2014'))
     # img_names = os.listdir(os.path.join('DIBCO_DATA','DIBCO2018'))
     # img_names = os.listdir(os.path.join('Bleed_Through_Database', 'rgb'))
     # img_names = os.listdir(os.path.join("4C1_PALLADIUS_FUSCUS"))
-    # img_names = ['CNMD0000263308_0111_Carta_53r.jpg']
+    img_names = ['CNMD0000250043_0081_Carta_35v.jpg']
 
     for img_name in img_names:
     
@@ -655,7 +655,7 @@ if __name__ == "__main__":
         # image_path = os.path.join('DIBCO_DATA','DIBCO2018',img_name)
         # image_path = os.path.join(os.path.join('Bleed_Through_Database', 'rgb', img_name))
         # image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
-        # image_path = os.path.join("Firenze_BibliotecaMediceaLaurenziana_Plut_40_1", img_name)
+        image_path = os.path.join("Firenze_BibliotecaMediceaLaurenziana_Plut_40_1", img_name)
         # image_path = os.path.join("4C1_PALLADIUS_FUSCUS", img_name)
     
         models_folder_path = 'models'
@@ -666,19 +666,19 @@ if __name__ == "__main__":
         cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
 
         # save_folder_path = 'cleaned_napoli_new'
-        # save_folder_path = 'assets'
+        save_folder_path = 'assets'
         # save_folder_path = os.path.join('Bleed_Through_Database', 'cleaned_rgb')
         # save_folder_path = '4C1_PALLADIUS_FUSCUS_cleaned'
-        save_folder_path = os.path.join("DIBCO_DATA_pred", "DIBCO2014")
+        # save_folder_path = os.path.join("DIBCO_DATA_pred", "DIBCO2014")
 
         mask_page_folder_path = save_folder_path # Use None if you don't want to save the mask and the page
         os.makedirs(save_folder_path, exist_ok=True)
 
-        # ornament_model_name = "Residual_attention_UNet_ornament_extraction"
-        ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
+        ornament_model_name = "Residual_attention_UNet_ornament_extraction"
+        # ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
         text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
-        page_extraction_model_name = None
-        # page_extraction_model_name = "Residual_attention_UNet_page_extraction"
+        # page_extraction_model_name = None
+        page_extraction_model_name = "Residual_attention_UNet_page_extraction"
 
         cleaned_image = cleaner.median_image_inpainting(save_folder_path_mask_page = mask_page_folder_path,
                                                                     ornament_model_name=ornament_model_name,

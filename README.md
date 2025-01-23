@@ -7,7 +7,7 @@ Ancient manuscripts suffer from aging problems, due to chemical agents, humidity
 Our bleed-through minimization approach works without the alignment technique (no registration of the pages). It is based on the segmentation of different components within a page, with a further denoising algorithm to detect and reject the bleed-through presence, preserving all the rest.
 
 In the following figure it is shown a diagram of the main steps of our approach.
-<img src="assets/workflow_diagram.png" height="500px"/>
+<img src="assets/workflow_diagram.jpg" height="500px"/>
 
 The following image shows on the left side the original page and on the right side the cleaned page. The bleed-through is removed and the text is preserved.
 Click on it so that you can move the slider to better appreciate the results.

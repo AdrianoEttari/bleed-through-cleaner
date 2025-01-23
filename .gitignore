@@ -179,7 +179,7 @@ quantitative_evaluation.py
 LAUNCHER.sh
 
 # Folders
-preds/
+DIBCO_DATA_pred/
 dataset_text_extraction_patches/
 DIBCO_DATA/
 DIBCO_DATA_patches_ALL*/

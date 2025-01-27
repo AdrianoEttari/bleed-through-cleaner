@@ -652,7 +652,8 @@ if __name__ == "__main__":
     # img_names = os.listdir(os.path.join('DIBCO_DATA','DIBCO2017'))
     # img_names = os.listdir(os.path.join('Bleed_Through_Database', 'rgb'))
     # img_names = os.listdir(os.path.join("4C1_PALLADIUS_FUSCUS"))
-    img_names = ['CNMD0000263308_0288_Carta_141v.jpg']
+    # img_names = ['CNMD0000263308_0170_Carta_82v.jpg', 'CNMD0000263308_0111_Carta_53r.jpg', 'CNMD0000263308_0068_Carta_31v.jpg', "CNMD0000263308_0278_Carta_136v.jpg", "CNMD0000263308_0288_Carta_141v.jpg"]
+    img_names = ['CNMD0000263308_0170_Carta_82v.jpg']
 
     for img_name in img_names:
     
@@ -713,16 +714,27 @@ if __name__ == "__main__":
         # new_name = f'{img_name}_GMM.png'
         # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
-
+        # for filter_strength in [5,6,7,8,9,10]:
+        #     for color_filter_strength in [10,20,30]:
+        #         for templateWindowSize in [11, 15, 21]:
+        #             for searchWindowSize in [35, 45, 55]:
+        #                 cleaned_image = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
+        #                                                                         text_model_name=text_model_name,
+        #                                                                         page_extraction_model_name=page_extraction_model_name,
+        #                                                                             filter_strength=filter_strength, color_filter_strength=color_filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize,
+        #                                                                         save_folder_path_mask_page = mask_page_folder_path)
+        #                 # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_NLM.png'
+        #                 new_name = f'{img_name}_NLM_{filter_strength}_{color_filter_strength}_{templateWindowSize}_{searchWindowSize}.png'
+        #                 Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+    
         cleaned_image = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
-                                                                text_model_name=text_model_name,
-                                                                page_extraction_model_name=page_extraction_model_name,
-                                                                    filter_strength=10, color_filter_strength=10, templateWindowSize=11, searchWindowSize=35,
-                                                                save_folder_path_mask_page = mask_page_folder_path)
+                                                        text_model_name=text_model_name,
+                                                        page_extraction_model_name=page_extraction_model_name,
+                                                            filter_strength=8, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
+                                                        save_folder_path_mask_page = mask_page_folder_path)
         # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_NLM.png'
-        new_name = f'{img_name}_NLM.png'
+        new_name = f'{img_name}_NLM_6_20_15_35.png'
         Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
-        
 
         # cleaned_image = cleaner.Gaussian_denoise_image_inpainting(sigma=5, save_folder_path_mask_page = mask_page_folder_path)
         # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_GaussDenoise.png'

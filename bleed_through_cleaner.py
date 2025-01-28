@@ -13,6 +13,7 @@ from astropy.stats import biweight_location, sigma_clip
 from sklearn.mixture import GaussianMixture
 from scipy.ndimage import gaussian_filter
 import warnings
+import shutil
 
 class bleed_through_cleaner:
     def __init__(self, image_path, models_folder_path, device) -> None:
@@ -293,8 +294,8 @@ class bleed_through_cleaner:
         '''
 
         if save_folder_path_mask_page:
-            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_page_filtered.png')
-            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_BLEED_THROUGH_MASK.png')
+            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_page_filtered.png')
+            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_BLEED_THROUGH_MASK.png')
             # page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_page_filtered.png')
             # mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_BLEED_THROUGH_MASK.png')
 
@@ -344,8 +345,8 @@ class bleed_through_cleaner:
         if save_folder_path_mask_page:
             # page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_page_filtered.png')
             # mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_BLEED_THROUGH_MASK.png')
-            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_page_filtered.png')
-            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_BLEED_THROUGH_MASK.png')
+            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_page_filtered.png')
+            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_BLEED_THROUGH_MASK.png')
 
             if os.path.exists(page_filtered_save_path) and os.path.exists(mask_bleed_through_save_path):
                 page_filtered_image = np.array(Image.open(page_filtered_save_path))
@@ -446,8 +447,8 @@ class bleed_through_cleaner:
         if save_folder_path_mask_page:
             # page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_page_filtered.png')
             # mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_BLEED_THROUGH_MASK.png')
-            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_page_filtered.png')
-            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_BLEED_THROUGH_MASK.png')
+            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_page_filtered.png')
+            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_BLEED_THROUGH_MASK.png')
             
             if os.path.exists(page_filtered_save_path) and os.path.exists(mask_bleed_through_save_path):
                 page_filtered_image = np.array(Image.open(page_filtered_save_path))
@@ -545,7 +546,7 @@ class bleed_through_cleaner:
                             page_extraction_model_name='Residual_attention_UNet_page_extraction',
                             ornament_model_name='Residual_attention_UNet_ornament_extraction',
                             text_model_name='Residual_attention_UNet_text_extraction',
-                            filter_strength=10, color_filter_strength=10, templateWindowSize=11, searchWindowSize=35,
+                            filter_strength=6, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
                             save_folder_path_mask_page = None):
 
         '''
@@ -566,9 +567,10 @@ class bleed_through_cleaner:
         if save_folder_path_mask_page:
             # page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_page_filtered.png')
             # mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_BLEED_THROUGH_MASK.png')
-            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_page_filtered.png')
-            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_BLEED_THROUGH_MASK.png')
-
+           
+            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0] +'_page_filtered.png')
+            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0] +'_BLEED_THROUGH_MASK.png')
+ 
             if os.path.exists(page_filtered_save_path) and os.path.exists(mask_bleed_through_save_path):
                 page_filtered_image = np.array(Image.open(page_filtered_save_path))
                 mask = np.array(Image.open(mask_bleed_through_save_path))
@@ -616,8 +618,8 @@ class bleed_through_cleaner:
         if save_folder_path_mask_page:
             # page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_page_filtered.png')
             # mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_BLEED_THROUGH_MASK.png')
-            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_page_filtered.png')
-            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path)+'_BLEED_THROUGH_MASK.png')
+            page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_page_filtered.png')
+            mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_BLEED_THROUGH_MASK.png')
             
             if os.path.exists(page_filtered_save_path) and os.path.exists(mask_bleed_through_save_path):
                 page_filtered_image = np.array(Image.open(page_filtered_save_path))
@@ -653,7 +655,8 @@ if __name__ == "__main__":
     # img_names = os.listdir(os.path.join('Bleed_Through_Database', 'rgb'))
     # img_names = os.listdir(os.path.join("4C1_PALLADIUS_FUSCUS"))
     # img_names = ['CNMD0000263308_0170_Carta_82v.jpg', 'CNMD0000263308_0111_Carta_53r.jpg', 'CNMD0000263308_0068_Carta_31v.jpg', "CNMD0000263308_0278_Carta_136v.jpg", "CNMD0000263308_0288_Carta_141v.jpg"]
-    img_names = ['CNMD0000263308_0170_Carta_82v.jpg']
+    # img_names = ['CNMD0000263308_0438_Carta_216v.jpg']
+    img_names = ["CNMD0000263308_0170_Carta_82v.jpg"]
 
     for img_name in img_names:
     
@@ -663,10 +666,10 @@ if __name__ == "__main__":
         image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
         # image_path = os.path.join("Firenze_BibliotecaMediceaLaurenziana_Plut_40_1", img_name)
         # image_path = os.path.join("4C1_PALLADIUS_FUSCUS", img_name)
-    
+
         models_folder_path = 'models'
-        # device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        device = 'mps'
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        # device = 'mps'
         print('Using device:', device)
 
         cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
@@ -692,7 +695,7 @@ if __name__ == "__main__":
         #                                                             page_extraction_model_name = page_extraction_model_name
         #                                                             )
         # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_median.png'
-        # new_name = f'{img_name}_median.png'
+        # new_name = img_name.replace('.jpg','')+'_median.png'
         # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
         # cleaned_image = cleaner.biweight_image_inpainting(ornament_model_name=ornament_model_name,
@@ -702,7 +705,7 @@ if __name__ == "__main__":
         #                                                                 sigma_clip_sigma_upper=2, sigma_clip_maxiters=3,
         #                                                                 save_folder_path_mask_page = mask_page_folder_path)
         # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_biweight_inverse.png'
-        # new_name = f'{img_name}_biweight_inverse.png'
+        # new_name = img_name.replace('.jpg','')+'_biweight_inverse.png'
         # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
 
@@ -711,7 +714,7 @@ if __name__ == "__main__":
         #                                                            page_extraction_model_name=page_extraction_model_name,
         #                                                             save_folder_path_mask_page = mask_page_folder_path)
         # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_GMM.png'
-        # new_name = f'{img_name}_GMM.png'
+        # new_name = img_name.replace('.jpg','')+'_GMM.png'
         # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
         # for filter_strength in [5,6,7,8,9,10]:
@@ -727,14 +730,31 @@ if __name__ == "__main__":
         #                 new_name = f'{img_name}_NLM_{filter_strength}_{color_filter_strength}_{templateWindowSize}_{searchWindowSize}.png'
         #                 Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
     
+        num_smoothings = 1
+            
         cleaned_image = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
                                                         text_model_name=text_model_name,
                                                         page_extraction_model_name=page_extraction_model_name,
-                                                            filter_strength=8, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
+                                                            filter_strength=6, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
                                                         save_folder_path_mask_page = mask_page_folder_path)
-        # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_NLM.png'
-        new_name = f'{img_name}_NLM_6_20_15_35.png'
+
+        new_name = img_name.replace('.jpg','')+'_NLM.png'
         Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+        
+        if num_smoothings > 1:
+            for _ in range(num_smoothings):
+                os.rename(os.path.join(save_folder_path, new_name), os.path.join(save_folder_path, new_name.replace('_NLM.png', '.png')))
+                os.rename(os.path.join(save_folder_path, new_name.replace('_NLM.png', '_page_filtered.png')), os.path.join(save_folder_path, new_name.replace('_NLM.png', '_page_filtered_old.png')))
+                shutil.copy(os.path.join(save_folder_path, new_name.replace('_NLM.png', '.png')), os.path.join(save_folder_path, new_name.replace('_NLM.png', '_page_filtered.png')))
+                image_path  = os.path.join(save_folder_path, new_name.replace('_NLM.png', '.png'))
+                cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
+                cleaned_image = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
+                                                            text_model_name=text_model_name,
+                                                            page_extraction_model_name=page_extraction_model_name,
+                                                                filter_strength=6, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
+                                                            save_folder_path_mask_page = mask_page_folder_path)
+                Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+            os.remove(os.path.join(save_folder_path, new_name.replace('_NLM.png', '.png')))
 
         # cleaned_image = cleaner.Gaussian_denoise_image_inpainting(sigma=5, save_folder_path_mask_page = mask_page_folder_path)
         # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_GaussDenoise.png'

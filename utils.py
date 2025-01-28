@@ -221,7 +221,7 @@ def unsharp_masking(img_path, save_path):
     gaussian_blur = cv2.GaussianBlur(image, (0, 0), 3)
     # STEP 2: Subtract the blurred image from the original to isolate the high-frequency details (edges).
     # The extracted details are amplified and added back to the original image, making edges sharper
-    sharpened = cv2.addWeighted(image, 1.5, gaussian_blur, -0.5, 0)
+    sharpened = cv2.addWeighted(image, 1.5, gaussian_blur, -0.5, 0) # 1.5 (original image weight), -0.5 (blurred image weight). The subtraction removes the blurred part. 0 is the scaler bias (no additional brightness adjustment).
 
     # Save the sharpened image
     cv2.imwrite(save_path, sharpened)

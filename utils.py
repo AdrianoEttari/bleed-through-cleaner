@@ -203,3 +203,25 @@ def weighted_total_error_function(gt_img, pred_img):
 # except:
 #     real = np.array(Image.open(r'DIBCO2014_GT\H10_estGT.tiff'))/255
 # weighted_total_error_function(real, predicted)
+
+
+def unsharp_masking(img_path, save_path):
+    '''
+    This function applies the unsharp masking technique to an image.
+    -Input:
+        img_path: a string with the path to the image.
+        save_path: a string with the path to save the sharpened image.
+    -Output:
+        None
+    '''
+    image = cv2.imread(img_path)
+
+    # Create an unsharp mask
+    # STEP 1: Apply a Gaussian blur to the original image to create a softened version.
+    gaussian_blur = cv2.GaussianBlur(image, (0, 0), 3)
+    # STEP 2: Subtract the blurred image from the original to isolate the high-frequency details (edges).
+    # The extracted details are amplified and added back to the original image, making edges sharper
+    sharpened = cv2.addWeighted(image, 1.5, gaussian_blur, -0.5, 0)
+
+    # Save the sharpened image
+    cv2.imwrite(save_path, sharpened)

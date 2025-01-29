@@ -651,19 +651,18 @@ class bleed_through_cleaner:
 
 if __name__ == "__main__":
     # img_names = os.listdir(os.path.join('DIBCO_DATA','test','DIBCO2014'))
-    # img_names = os.listdir(os.path.join('DIBCO_DATA','DIBCO2017'))
+    img_names = os.listdir(os.path.join('DIBCO_DATA','DIBCO2013'))
     # img_names = os.listdir(os.path.join('Bleed_Through_Database', 'rgb'))
     # img_names = os.listdir(os.path.join("4C1_PALLADIUS_FUSCUS"))
     # img_names = ['CNMD0000263308_0170_Carta_82v.jpg', 'CNMD0000263308_0111_Carta_53r.jpg', 'CNMD0000263308_0068_Carta_31v.jpg', "CNMD0000263308_0278_Carta_136v.jpg", "CNMD0000263308_0288_Carta_141v.jpg"]
     # img_names = ['CNMD0000263308_0438_Carta_216v.jpg']
-    img_names = ["CNMD0000263308_0170_Carta_82v.jpg"]
+    # img_names = ["CNMD0000263308_0170_Carta_82v.jpg"]
 
     for img_name in img_names:
-    
         # image_path = os.path.join('DIBCO_DATA','test','DIBCO2014',img_name)
-        # image_path = os.path.join('DIBCO_DATA','DIBCO2017',img_name)
+        image_path = os.path.join('DIBCO_DATA','DIBCO2013',img_name)
         # image_path = os.path.join(os.path.join('Bleed_Through_Database', 'rgb', img_name))
-        image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
+        # image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
         # image_path = os.path.join("Firenze_BibliotecaMediceaLaurenziana_Plut_40_1", img_name)
         # image_path = os.path.join("4C1_PALLADIUS_FUSCUS", img_name)
 
@@ -675,27 +674,27 @@ if __name__ == "__main__":
         cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
 
         # save_folder_path = 'cleaned_napoli_new'
-        save_folder_path = 'assets'
+        # save_folder_path = 'assets'
         # save_folder_path = os.path.join('Bleed_Through_Database', 'cleaned_rgb')
         # save_folder_path = '4C1_PALLADIUS_FUSCUS_cleaned'
-        # save_folder_path = os.path.join("DIBCO_DATA_pred", "DIBCO2014")
+        save_folder_path = os.path.join("DIBCO_evaluation", "DIBCO_DATA_pred", "Images", "DIBCO2013")
 
         mask_page_folder_path = save_folder_path # Use None if you don't want to save the mask and the page
         os.makedirs(save_folder_path, exist_ok=True)
 
-        ornament_model_name = "Residual_attention_UNet_ornament_extraction"
-        # ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
+        # ornament_model_name = "Residual_attention_UNet_ornament_extraction"
+        ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
         text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
-        # page_extraction_model_name = None
-        page_extraction_model_name = "Residual_attention_UNet_page_extraction"
+        page_extraction_model_name = None
+        # page_extraction_model_name = "Residual_attention_UNet_page_extraction"
 
         # cleaned_image = cleaner.median_image_inpainting(save_folder_path_mask_page = mask_page_folder_path,
         #                                                             ornament_model_name=ornament_model_name,
         #                                                             text_model_name=text_model_name,
         #                                                             page_extraction_model_name = page_extraction_model_name
         #                                                             )
-        # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_median.png'
-        # new_name = img_name.replace('.jpg','')+'_median.png'
+        # extension = img_name.split('.')[-1]
+        # new_name = img_name.replace('.'+extension,'')+'_median.png'
         # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
         # cleaned_image = cleaner.biweight_image_inpainting(ornament_model_name=ornament_model_name,
@@ -704,8 +703,8 @@ if __name__ == "__main__":
         #                                                                 sigma_clip_sigma=None, sigma_clip_sigma_lower=1.5, 
         #                                                                 sigma_clip_sigma_upper=2, sigma_clip_maxiters=3,
         #                                                                 save_folder_path_mask_page = mask_page_folder_path)
-        # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_biweight_inverse.png'
-        # new_name = img_name.replace('.jpg','')+'_biweight_inverse.png'
+        # extension = img_name.split('.')[-1]
+        # new_name = img_name.replace('.'+extension,'')+'_biweight.png'
         # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
 
@@ -713,8 +712,8 @@ if __name__ == "__main__":
         #                                                            text_model_name=text_model_name,
         #                                                            page_extraction_model_name=page_extraction_model_name,
         #                                                             save_folder_path_mask_page = mask_page_folder_path)
-        # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_GMM.png'
-        # new_name = img_name.replace('.jpg','')+'_GMM.png'
+        # extension = img_name.split('.')[-1]
+        # new_name = img_name.replace('.'+extension,'')+'_GMM.png'
         # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
         # for filter_strength in [5,6,7,8,9,10]:
@@ -738,7 +737,8 @@ if __name__ == "__main__":
                                                             filter_strength=6, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
                                                         save_folder_path_mask_page = mask_page_folder_path)
 
-        new_name = img_name.replace('.jpg','')+'_NLM.png'
+        extension = img_name.split('.')[-1]
+        new_name = img_name.replace('.'+extension,'')+'_NLM.png'
         Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
         
         if num_smoothings > 1:
@@ -757,8 +757,8 @@ if __name__ == "__main__":
             os.remove(os.path.join(save_folder_path, new_name.replace('_NLM.png', '.png')))
 
         # cleaned_image = cleaner.Gaussian_denoise_image_inpainting(sigma=5, save_folder_path_mask_page = mask_page_folder_path)
-        # # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_GaussDenoise.png'
-        # new_name = f'{img_name}_GaussDenoise.png'
+        # extension = img_name.split('.')[-1]
+        # new_name = img_name.replace('.'+extension,'')+'_GaussDenoise.png'
         # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
 

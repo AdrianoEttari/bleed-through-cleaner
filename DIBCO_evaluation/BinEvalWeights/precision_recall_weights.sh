@@ -3,7 +3,7 @@
 read -p "Enter the base directory: " BASE_DIR
 # you have to write D:/bleed-through-cleaner in the prompt
 
-DIBCO_year=2013
+DIBCO_year=2014
 
 image_dir="$BASE_DIR/DIBCO_DATA/DIBCO"$DIBCO_year"_GT"
 output_dir="$BASE_DIR/DIBCO_evaluation/DIBCO_DATA_pred/Weights/DIBCO"$DIBCO_year""
@@ -12,13 +12,13 @@ output_dir="$BASE_DIR/DIBCO_evaluation/DIBCO_DATA_pred/Weights/DIBCO"$DIBCO_year
 mkdir -p "$output_dir"
 
 # Iterate through ground truth images (assuming GT filenames contain '_GT')
-for gt_file in "$image_dir"/*_gt.bmp; do
+for gt_file in "$image_dir"/*.bmp; do
     # Extract base filename without extension
-    base_name=$(basename "$gt_file" "_gt.bmp")
+    base_name=$(basename "$gt_file" ".bmp")
 
     # Expected output filenames (saved in the same directory as input images)
-    r_weights="${base_name}_gt_RWeights.dat"
-    p_weights="${base_name}_gt_PWeights.dat"
+    r_weights="${base_name}_RWeights.dat"
+    p_weights="${base_name}_PWeights.dat"
 
     # Run BinEvalWeights.exe with correct parameters
     ./BinEvalWeights.exe "$gt_file" "$r_weights" "$p_weights"

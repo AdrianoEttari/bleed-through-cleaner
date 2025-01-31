@@ -177,12 +177,13 @@ LIBRI_DA_FARE.txt
 MAIN_CLEANER.py
 quantitative_evaluation.py
 LAUNCHER.sh
+assets/time*
 
 # Folders
 DIBCO_evaluation/DIBCO_DATA_pred/
 dataset_text_extraction_patches/
 DIBCO_DATA/
-DIBCO_DATA_patches_ALL*/
+DIBCO_DATA_patches_*/
 Firenze_BibliotecaMediceaLaurenziana_Plut_40_1*/
 Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino*/
 ornament_detection_data*/

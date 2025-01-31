@@ -8,12 +8,19 @@ def load_weights(file_path):
     # Read the .dat file as an array
     return np.loadtxt(file_path)
 
-DIBCO_year = 2017
-img_number = 1
+DIBCO_year = 2014
+img_number = 7
+
+if DIBCO_year == 2014:
+    # img_number = "PR0" + str(img_number)
+    if img_number < 10:
+        img_number = "H0" + str(img_number)
+    else:
+        img_number = "H" + str(img_number)
 
 # Replace with the path to your Precision and Recall weights
-precision_weights_path = os.path.join('..', 'DIBCO_DATA_pred', 'Weights', 'DIBCO'+str(DIBCO_year), str(img_number)+'_gt_PWeights.dat')
-recall_weights_path =  os.path.join('..', 'DIBCO_DATA_pred', 'Weights', 'DIBCO'+str(DIBCO_year), str(img_number)+'_gt_RWeights.dat')
+precision_weights_path = os.path.join('..', 'DIBCO_DATA_pred', 'Weights', 'DIBCO'+str(DIBCO_year), str(img_number)+'_PWeights.dat')
+recall_weights_path =  os.path.join('..', 'DIBCO_DATA_pred', 'Weights', 'DIBCO'+str(DIBCO_year), str(img_number)+'_RWeights.dat')
 
 precision_weights = load_weights(precision_weights_path)
 recall_weights = load_weights(recall_weights_path)

@@ -1,4 +1,4 @@
-#%%
+#%% RENAME THE _gt FILES OF THE GT FOLDERS BY REMOVING _gt
 import shutil
 import sys
 import os
@@ -13,7 +13,7 @@ from tqdm import tqdm
 DIBCO_folder_path = os.path.join('..', 'DIBCO_DATA')
 
 for subfolder in os.listdir(DIBCO_folder_path):
-    if subfolder != 'test':
+    # if subfolder != 'test':
         if 'GT' in os.path.join(DIBCO_folder_path, subfolder):
             for file_name in os.listdir(os.path.join(DIBCO_folder_path, subfolder)):
                 img = Image.open(os.path.join(DIBCO_folder_path, subfolder, file_name))
@@ -23,34 +23,37 @@ for subfolder in os.listdir(DIBCO_folder_path):
                     img.save(os.path.join(DIBCO_folder_path, subfolder, new_name))
                     assert os.path.exists(os.path.join(DIBCO_folder_path, subfolder.replace('_GT',''), new_name))
 
-#%%
-DIBCO2014_GT_tiff_path = '../DIBCO_DATA/test/DIBCO2014_GT/H06_estGT.tiff'
-img_tiff = Image.open(DIBCO2014_GT_tiff_path)
+# #%%
+# DIBCO2014_GT_tiff_path = '../DIBCO_DATA/test/DIBCO2014_GT/H06_estGT.tiff'
+# img_tiff = Image.open(DIBCO2014_GT_tiff_path)
 
-# %%
-pages_path = os.path.join('..', 'DIBCO_DATA_patches_ALL', 'train', 'pages')
-masks_path = os.path.join('..', 'DIBCO_DATA_patches_ALL', 'train', 'masks')
+# %% CONSIDER ONLY THE FILES OF THE FOLDER BEFORE THE cut_year AND REMOVE THE FILES WHICH GET THE _gt SUFFIX
+transform = transforms.ToTensor()
+
+cut_year = 2017
+
+pages_path = os.path.join('..', f'DIBCO_DATA_patches_until_{cut_year}', 'train', 'pages')
+masks_path = os.path.join('..',  f'DIBCO_DATA_patches_until_{cut_year}', 'train', 'masks')
 os.makedirs(masks_path, exist_ok=True)
 os.makedirs(pages_path, exist_ok=True)
-
-transform = transforms.ToTensor()
 
 page_file_paths = []
 gt_file_paths = []
 for dirpath, dirnames, filenames in os.walk(DIBCO_folder_path):
-    if 'GT' in os.path.basename(dirpath):
-        for filename in filenames:
-            if 'gt' not in os.path.basename(filename):
-                gt_file_paths.append(os.path.join(dirpath, filename))
-            else:
-                os.remove(os.path.join(dirpath, filename))
-    else:
-        for filename in filenames:
-            page_file_paths.append(os.path.join(dirpath, filename))
+    if os.path.basename(dirpath).startswith('DIBCO2') and int(os.path.basename(dirpath)[5:9]) < cut_year:
+        if 'GT' in os.path.basename(dirpath):
+                for filename in filenames:
+                    if 'gt' not in os.path.basename(filename):
+                        gt_file_paths.append(os.path.join(dirpath, filename))
+                    else:
+                        os.remove(os.path.join(dirpath, filename))
+        else:
+            for filename in filenames:
+                page_file_paths.append(os.path.join(dirpath, filename))
     
 page_file_paths = sorted(page_file_paths)
 gt_file_paths = sorted(gt_file_paths)
-#%%
+#%% BUILD PATCHES OF 400x400 AND DISCARD THE IMAGE WITH EITHER WIDTH OR HEIGHT LESS THAN 400.
 width = 400
 height = 400
 
@@ -80,10 +83,10 @@ for j,file_path in tqdm(enumerate(page_file_paths)):
             new_file_name = f'img_{j}' + f'patch_{i}.png'
             patch.save(os.path.join(pages_path, new_file_name))
 
-# %%
+# %% CHECK THE NUMBER OF PATCHES
 print(len(os.listdir(pages_path)))
 print(len(os.listdir(masks_path)))
-# %%
+# %% CHECK THE WIDTH, HEIGHT AND CHANNELS OF THE IMAGES WITH THREE HISTOGRAMS
 import shutil
 import sys
 import os
@@ -96,9 +99,10 @@ import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-DIBCO_folder_path = os.path.join('..', 'DIBCO_DATA_patches_ALL', 'train')
-masks_path = os.path.join(DIBCO_folder_path, 'masks')
-pages_path = os.path.join(DIBCO_folder_path, 'pages')
+cut_year = 2017
+
+pages_path = os.path.join('..', f'DIBCO_DATA_patches_until_{cut_year}', 'train', 'pages')
+masks_path = os.path.join('..',  f'DIBCO_DATA_patches_until_{cut_year}', 'train', 'masks')
 
 tot_widths = []
 tot_heights = []

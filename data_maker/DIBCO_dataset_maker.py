@@ -30,7 +30,7 @@ for subfolder in os.listdir(DIBCO_folder_path):
 # %% CONSIDER ONLY THE FILES OF THE FOLDER BEFORE THE cut_year AND REMOVE THE FILES WHICH GET THE _gt SUFFIX
 transform = transforms.ToTensor()
 
-cut_year = 2017
+cut_year = 2019
 
 pages_path = os.path.join('..', f'DIBCO_DATA_patches_until_{cut_year}', 'train', 'pages')
 masks_path = os.path.join('..',  f'DIBCO_DATA_patches_until_{cut_year}', 'train', 'masks')
@@ -99,7 +99,7 @@ import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
-cut_year = 2017
+cut_year = 2019
 
 pages_path = os.path.join('..', f'DIBCO_DATA_patches_until_{cut_year}', 'train', 'pages')
 masks_path = os.path.join('..',  f'DIBCO_DATA_patches_until_{cut_year}', 'train', 'masks')

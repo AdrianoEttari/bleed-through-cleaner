@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from PIL import Image  
 
-cut_year = 2017
+cut_year = 2019
 
 pages_path = os.path.join('..', f'DIBCO_DATA_patches_until_{cut_year}', 'train', 'pages')
 

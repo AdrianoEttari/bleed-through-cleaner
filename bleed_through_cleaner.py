@@ -664,9 +664,9 @@ if __name__ == "__main__":
         # image_path = os.path.join("Firenze_BibliotecaMediceaLaurenziana_Plut_40_1", img_name)
         # image_path = os.path.join("4C1_PALLADIUS_FUSCUS", img_name)
 
-        models_folder_path = 'models_CHECK'
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        # device = 'mps'
+        models_folder_path = 'models_CHECKING'
+        # device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        device = 'mps'
         print('Using device:', device)
 
         cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
@@ -675,14 +675,14 @@ if __name__ == "__main__":
         # save_folder_path = 'assets'
         # save_folder_path = os.path.join('Bleed_Through_Database', 'cleaned_rgb')
         # save_folder_path = '4C1_PALLADIUS_FUSCUS_cleaned'
-        save_folder_path = os.path.join("DIBCO_evaluation", "DIBCO_DATA_pred", "Images", "DIBCO2017")
+        save_folder_path = os.path.join("DIBCO_evaluation", "DIBCO_DATA_pred_200_epochs", "Images", "DIBCO2017")
 
         mask_page_folder_path = save_folder_path # Use None if you don't want to save the mask and the page
         os.makedirs(save_folder_path, exist_ok=True)
 
         # ornament_model_name = "Residual_attention_UNet_ornament_extraction"
         ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
-        text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
+        text_model_name = "Residual_attention_UNet_text_extraction_finetuning_200_epochs"
         # text_model_name = "Residual_attention_UNet_text_extraction"
         page_extraction_model_name = None
         # page_extraction_model_name = "Residual_attention_UNet_page_extraction"

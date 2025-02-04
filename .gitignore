@@ -176,7 +176,7 @@ GMM_bleed_through_cleaner.py
 LIBRI_DA_FARE.txt
 MAIN_CLEANER.py
 quantitative_evaluation.py
-LAUNCHER.sh
+# LAUNCHER.sh
 assets/time*
 
 # Folders

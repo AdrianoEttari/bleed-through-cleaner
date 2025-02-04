@@ -180,7 +180,7 @@ quantitative_evaluation.py
 assets/time*
 
 # Folders
-DIBCO_evaluation/DIBCO_DATA_pred*/
+DIBCO_evaluation/DIBCO_DATA_*/
 dataset_text_extraction_patches/
 DIBCO_DATA/
 DIBCO_DATA_patches_*/

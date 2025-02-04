@@ -204,6 +204,41 @@ def weighted_total_error_function(gt_img, pred_img):
 #     real = np.array(Image.open(r'DIBCO2014_GT\H10_estGT.tiff'))/255
 # weighted_total_error_function(real, predicted)
 
+def psnr(ground_truth, predicted, pixel_max=255):
+    '''
+    Compute the Peak Signal to Noise Ratio between the real mask and the predicted one.
+
+    The masks must be float32 and not uint8, because the second is 8 bit and so 
+    has just values between 0 and 255.
+    '''
+    ground_truth = ground_truth.astype(np.float32)  # Convert to float
+    predicted = predicted.astype(np.float32)
+    mse = np.mean((ground_truth - predicted) ** 2)
+    if mse == 0:
+        return float('inf')  # Perfect match should return infinity
+    return 10 * np.log10(pixel_max**2 / mse)
+
+def f1_score_inverted(ground_truth, predicted):
+    '''
+    Computes the F1 score between the ground truth and the predicted mask.
+    
+    The masks must be float32 and not uint8, because the second is 8 bit and so 
+    has just values between 0 and 255.
+    '''
+    ground_truth = ground_truth.astype(np.float32)  # Convert to float
+    predicted = predicted.astype(np.float32)
+    # Convert images to binary: 1 for foreground (0), 0 for background (255)
+    gt_binary = (ground_truth == 0)  # Foreground is 1 (was 0)
+    pred_binary = (predicted == 0)  # Foreground is 1 (was 0)
+
+    # Compute TP, FP, FN
+    TP = np.sum((gt_binary == 1) & (pred_binary == 1))  # Correctly detected foreground
+    FP = np.sum((gt_binary == 0) & (pred_binary == 1))  # False foreground detection
+    FN = np.sum((gt_binary == 1) & (pred_binary == 0))  # Missed foreground
+
+    # Compute F1-score
+    denominator = (2 * TP + FP + FN)
+    return (2 * TP / denominator) if denominator > 0 else 1.0  # Returns 1 if both images are empty (perfect match)
 
 def unsharp_masking(img_path, save_path):
     '''

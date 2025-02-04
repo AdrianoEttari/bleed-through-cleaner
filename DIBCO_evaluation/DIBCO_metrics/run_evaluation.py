@@ -53,13 +53,13 @@ import pandas as pd
 
 # Define absolute paths
 exe_path = os.path.abspath("DIBCO_metrics.exe")
-DIBCO_year = 2017
+DIBCO_year = 2019
 
 # Define paths for dataset
 gt_folder = os.path.abspath(os.path.join('..', '..', 'DIBCO_DATA', f'DIBCO{DIBCO_year}_GT'))
-binarized_folder = os.path.abspath(os.path.join('..', 'DIBCO_DATA_pred', 'Images', f'DIBCO{DIBCO_year}'))
-recall_weight_folder = os.path.abspath(os.path.join('..', 'DIBCO_DATA_pred', 'Weights', f'DIBCO{DIBCO_year}'))
-precision_weight_folder = os.path.abspath(os.path.join('..', 'DIBCO_DATA_pred', 'Weights', f'DIBCO{DIBCO_year}'))
+binarized_folder = os.path.abspath(os.path.join('..', 'DIBCO_DATA_until_2019_pred_400_epochs', 'Images', f'DIBCO{DIBCO_year}'))
+recall_weight_folder = os.path.abspath(os.path.join('..', 'DIBCO_DATA_until_2019_pred_400_epochs', 'Weights', f'DIBCO{DIBCO_year}'))
+precision_weight_folder = os.path.abspath(os.path.join('..', 'DIBCO_DATA_until_2019_pred_400_epochs', 'Weights', f'DIBCO{DIBCO_year}'))
 
 # Get all ground truth images (assuming they are BMP files)
 gt_images = [f for f in os.listdir(gt_folder) if f.endswith('.bmp')]

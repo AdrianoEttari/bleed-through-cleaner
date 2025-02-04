@@ -3,10 +3,10 @@
 read -p "Enter the base directory: " BASE_DIR
 # you have to write D:/bleed-through-cleaner in the prompt
 
-DIBCO_year=2017
+DIBCO_year=2019
 
 image_dir="$BASE_DIR/DIBCO_DATA/DIBCO"$DIBCO_year"_GT"
-output_dir="$BASE_DIR/DIBCO_evaluation/DIBCO_DATA_pred/Weights/DIBCO"$DIBCO_year""
+output_dir="$BASE_DIR/DIBCO_evaluation/DIBCO_DATA_until_2019_pred_400_epochs/Weights/DIBCO"$DIBCO_year""
 
 # Ensure the output directory exists
 mkdir -p "$output_dir"

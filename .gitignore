@@ -175,7 +175,7 @@ cython_debug/
 GMM_bleed_through_cleaner.py
 LIBRI_DA_FARE.txt
 MAIN_CLEANER.py
-quantitative_evaluation.py
+# quantitative_evaluation.py
 # LAUNCHER.sh
 assets/time*
 

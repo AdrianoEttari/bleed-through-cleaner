@@ -53,7 +53,7 @@ import pandas as pd
 
 # Define absolute paths
 exe_path = os.path.abspath("DIBCO_metrics.exe")
-DIBCO_year = 2019
+DIBCO_year = 2018
 
 # Define paths for dataset
 gt_folder = os.path.abspath(os.path.join('..', '..', 'DIBCO_DATA', f'DIBCO{DIBCO_year}_GT'))

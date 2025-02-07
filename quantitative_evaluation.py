@@ -6,7 +6,7 @@ from utils import weighted_total_error_function
 import os
 from scipy import stats
 
-DIBCO_year = 2018
+DIBCO_year = 2019
 input_data_folder = os.path.join('DIBCO_DATA',f'DIBCO{DIBCO_year}')
 real_data_folder = os.path.join('DIBCO_DATA',f'DIBCO{DIBCO_year}_GT')
 real_images = os.listdir(real_data_folder)
@@ -57,15 +57,33 @@ for idx in sorted(indexes_input_images):
     axs[2].set_title('Prediction mask')
     plt.show()
 
-foreground_median_absolute_deviation = stats.median_abs_deviation(foreground_errors, scale=1)
-plt.plot(np.arange(len(foreground_errors)), foreground_errors, marker='o', label='foreground error', color='blue')
-plt.plot(np.arange(len(background_errors)), background_errors, marker='o', label='background error', color='orange')
-plt.plot(np.arange(len(weighted_total_errors)), weighted_total_errors, marker='o', label='weighted total error', color='gray')
-plt.axhline(foreground_median_absolute_deviation, label='MAD foreground error', linestyle='dotted', linewidth=2, color='blue')
-plt.xticks(np.arange(0,len(foreground_errors)))
+# Assuming foreground_errors is a NumPy array or list
+foreground_median = np.median(foreground_errors)
+foreground_mad = stats.median_abs_deviation(foreground_errors, scale=1)
+
+# Compute upper and lower boundaries
+upper_boundary = foreground_median + foreground_mad
+lower_boundary = foreground_median - foreground_mad
+
+# Plot errors
+plt.plot(np.arange(len(foreground_errors)), foreground_errors, marker='o', label='Foreground Error', color='blue')
+plt.plot(np.arange(len(background_errors)), background_errors, marker='o', label='Background Error', color='orange')
+plt.plot(np.arange(len(weighted_total_errors)), weighted_total_errors, marker='o', label='Weighted Total Error', color='gray')
+
+# Plot median line
+plt.axhline(foreground_median, label='Median Foreground Error', linestyle='dashed', linewidth=2, color='blue')
+
+# Plot upper and lower boundary lines
+plt.axhline(upper_boundary, linestyle='dotted', linewidth=2, color='blue', label='Upper Bound (Median + MAD)')
+plt.axhline(lower_boundary, linestyle='dotted', linewidth=2, color='blue', label='Lower Bound (Median - MAD)')
+
+# Shaded region between upper and lower boundaries
+plt.fill_between(np.arange(len(foreground_errors)), lower_boundary, upper_boundary, color='blue', alpha=0.2)
+
+# Labels and legend
+plt.xticks(np.arange(len(foreground_errors)))
 plt.ylabel("Error (ratio)")
-plt.xlabel("Image number") 
-# plt.ylim([0.0,0.89])
+plt.xlabel("Image number")
 plt.legend()
 plt.show()
 
@@ -125,4 +143,6 @@ plt.plot(np.arange(len(background_errors)), background_errors, marker='o', label
 plt.plot(np.arange(len(weighted_total_errors)), weighted_total_errors, marker='o', label='weighted total error', color='gray')
 plt.legend()
 plt.show()
+
+
 # %%

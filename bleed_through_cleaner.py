@@ -587,12 +587,22 @@ class bleed_through_cleaner:
 
         image_to_inpaint = page_filtered_image.copy()
 
+        if self.device== "cuda":
+            gpu_image = cv2.cuda_GpuMat()  # Create a GPU image container
+            gpu_image.upload(image_to_inpaint)  # Upload image to GPU
+
         if color_filter_strength:
             print("NLM Color filter strength is used")
-            nlm_denoised_image = cv2.fastNlMeansDenoisingColored(image_to_inpaint, None, h=filter_strength, hColor=color_filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
+            if self.device=="cuda":
+                nlm_denoised_image = cv2.fastNlMeansDenoisingColored(gpu_image, None, h=filter_strength, hColor=color_filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
+            else:
+                nlm_denoised_image = cv2.fastNlMeansDenoisingColored(image_to_inpaint, None, h=filter_strength, hColor=color_filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
         else:
             print("NLM Color filter strength is not used")
-            nlm_denoised_image = cv2.fastNlMeansDenoising(image_to_inpaint, None, h=filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
+            if self.device=="cuda":
+                nlm_denoised_image = cv2.fastNlMeansDenoising(gpu_image, None, h=filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
+            else:
+                nlm_denoised_image = cv2.fastNlMeansDenoising(image_to_inpaint, None, h=filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
 
         pixels_not_to_inpaint = page_filtered_image[mask == 0]
         nlm_denoised_image[mask == 0] = pixels_not_to_inpaint

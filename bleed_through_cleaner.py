@@ -587,26 +587,17 @@ class bleed_through_cleaner:
 
         image_to_inpaint = page_filtered_image.copy()
 
-        if self.device== "cuda":
-            gpu_image = cv2.cuda_GpuMat()  # Create a GPU image container
-            gpu_image.upload(image_to_inpaint)  # Upload image to GPU
-
         if color_filter_strength:
             print("NLM Color filter strength is used")
-            if self.device=="cuda":
-                nlm_denoised_image = cv2.fastNlMeansDenoisingColored(gpu_image, None, h=filter_strength, hColor=color_filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
-            else:
-                nlm_denoised_image = cv2.fastNlMeansDenoisingColored(image_to_inpaint, None, h=filter_strength, hColor=color_filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
+            nlm_denoised_image = cv2.fastNlMeansDenoisingColored(image_to_inpaint, None, h=filter_strength, hColor=color_filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
         else:
             print("NLM Color filter strength is not used")
-            if self.device=="cuda":
-                nlm_denoised_image = cv2.fastNlMeansDenoising(gpu_image, None, h=filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
-            else:
-                nlm_denoised_image = cv2.fastNlMeansDenoising(image_to_inpaint, None, h=filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
+            nlm_denoised_image = cv2.fastNlMeansDenoising(image_to_inpaint, None, h=filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
 
         pixels_not_to_inpaint = page_filtered_image[mask == 0]
         nlm_denoised_image[mask == 0] = pixels_not_to_inpaint
         return nlm_denoised_image
+    
     
     def Gaussian_denoise_image_inpainting(self,
                             page_extraction_model_name='Residual_attention_UNet_page_extraction',
@@ -705,15 +696,15 @@ if __name__ == "__main__":
         # new_name = img_name.replace('.'+extension,'')+'_median.png'
         # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
-        cleaned_image = cleaner.biweight_image_inpainting(ornament_model_name=ornament_model_name,
-                                                                   text_model_name=text_model_name,
-                                                                   page_extraction_model_name = page_extraction_model_name,
-                                                                        sigma_clip_sigma=None, sigma_clip_sigma_lower=1.5, 
-                                                                        sigma_clip_sigma_upper=2, sigma_clip_maxiters=3,
-                                                                        save_folder_path_mask_page = mask_page_folder_path)
-        extension = img_name.split('.')[-1]
-        new_name = img_name.replace('.'+extension,'')+'_biweight.png'
-        Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+        # cleaned_image = cleaner.biweight_image_inpainting(ornament_model_name=ornament_model_name,
+        #                                                            text_model_name=text_model_name,
+        #                                                            page_extraction_model_name = page_extraction_model_name,
+        #                                                                 sigma_clip_sigma=None, sigma_clip_sigma_lower=1.5, 
+        #                                                                 sigma_clip_sigma_upper=2, sigma_clip_maxiters=3,
+        #                                                                 save_folder_path_mask_page = mask_page_folder_path)
+        # extension = img_name.split('.')[-1]
+        # new_name = img_name.replace('.'+extension,'')+'_biweight.png'
+        # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
 
 
         # cleaned_image = cleaner.GMM_image_inpainting(ornament_model_name=ornament_model_name,

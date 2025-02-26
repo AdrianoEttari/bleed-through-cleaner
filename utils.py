@@ -56,7 +56,117 @@ class get_data(Dataset):
             
         return x, y
     
+def page_filter(mask_page):
+        '''
+        This function takes a binary mask and returns the coordinates of the polygon that contains the page excluding 
+        the outside of the page (e.g. the table where the book is placed).
+
+        How it works:
+            * it moves from left to right, column by column and sums the values of the pixels in the column. If the sum is
+            0, it means that the column is empty and so it increments a counter. If the sum is not 0, it means that the column
+            contains a portion of the page and so we must stop the iterator because we have found the leftmost column of the page
+            whose index is indicated by the counter.
+
+            * it moves from right to left, column by column and sums the values of the pixels in the column. If the sum is
+            0, it means that the column is empty and so it increments a counter. If the sum is not 0, it means that the column
+            contains a portion of the page and so we must stop the iterator because we have found the rightmost column of the page
+            whose index is indicated by the counter.
+
+            * it moves from up to down, row by row and sums the values of the pixels in the row. If the sum is 0, it means that
+            the row is empty and so it increments a counter. If the sum is not 0, it means that the row contains a portion of the page
+            and so we must stop the iterator because we have found the uppermost row of the page whose index is indicated by the counter.
+
+            * it moves from down to up, row by row and sums the values of the pixels in the row. If the sum is 0, it means that
+            the row is empty and so it increments a counter. If the sum is not 0, it means that the row contains a portion of the page
+            and so we must stop the iterator because we have found the lowermost row of the page whose index is indicated by the counter.
+        '''
+        counter_x_left = 0
+        for col in range(mask_page.shape[1]):
+            if np.sum(mask_page[:,col])==0:
+                counter_x_left += 1
+            else:
+                break
+
+        counter_x_right = 0
+        for col in range(mask_page.shape[1])[::-1]:
+            if np.sum(mask_page[:,col])==0:
+                counter_x_right += 1
+            else:
+                break
+        
+        counter_y_up = 0
+        for raw in range(mask_page.shape[0]):
+            if np.sum(mask_page[raw,:])==0:
+                counter_y_up += 1
+            else:
+                break
+        
+        counter_y_down = 0
+        for raw in range(mask_page.shape[0])[::-1]:
+            if np.sum(mask_page[raw,:])==0:
+                counter_y_down += 1
+            else:
+                break
+        
+        x_left = counter_x_left
+        x_right = mask_page.shape[1]-counter_x_right
+        y_up = counter_y_up
+        y_down = mask_page.shape[0]-counter_y_down
+
+        return x_left, x_right, y_up, y_down
   
+def otsu_morphological_batch(batch, scale, starting_img):
+    """
+    """
+    B, C, H, W = batch.shape
+    binary_batch_list = []
+    page_filtered_list = []
+
+    for i in range(B):
+        img = batch[i]
+
+        # Convert to grayscale if needed
+        if C == 3:
+            img = 0.2989 * img[0] + 0.5870 * img[1] + 0.1140 * img[2]  # Convert RGB to grayscale
+        
+        img_np = (img * 255).byte().cpu().numpy()  # Convert to NumPy & scale to [0, 255]
+
+        # Ensure shape is (H, W), NOT (1, H, W)
+        if img_np.ndim == 3:
+            img_np = img_np.squeeze(0)  # Remove channel dimension if it exists
+
+        # Apply Otsu’s thresholding
+        _, binary_np = cv2.threshold(img_np, 0, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # Convert back to PyTorch tensor
+        # binary_tensor = torch.from_numpy(binary_np).float()
+        # Ensure shape matches expected (H, W)
+        # if binary_tensor.shape != (H, W):
+        #     binary_tensor = torch.nn.functional.interpolate(binary_tensor.unsqueeze(0).unsqueeze(0), size=(H, W), mode="nearest").squeeze()
+
+        # MORPHOLOGY
+        kernel = np.ones((5,5),np.uint8)
+        binary_np = cv2.morphologyEx(binary_np, cv2.MORPH_OPEN, kernel)
+
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary_np)
+        largest_component = np.argmax(stats[1:, cv2.CC_STAT_AREA]) + 1
+        binary_np = (labels == largest_component).astype("uint8")
+
+        x_left, x_right, y_up, y_down =page_filter(binary_np)
+        x_left = int(x_left/scale)
+        x_right = int(x_right/scale)
+        y_up = int(y_up/scale)
+        y_down = int(y_down/scale)
+
+        binary_np = Image.fromarray(binary_np).resize((starting_img.shape[-1], starting_img.shape[-2]))
+        binary_np = np.array(binary_np)[y_up:y_down, x_left:x_right]
+        page_filtered_list.append(starting_img[i, :,y_up:y_down, x_left:x_right].unsqueeze(0))
+        binary_batch_list.append(torch.from_numpy(binary_np).float().unsqueeze(0).unsqueeze(0))
+    import ipdb; ipdb.set_trace()
+    page_filtered_img = torch.cat(page_filtered_list, dim=0)
+    binary_batch = torch.cat(binary_batch_list, dim=0)
+    return binary_batch, page_filtered_img
+
 def otsu_thresholding(image: np.ndarray) -> np.ndarray:
     """
     Apply Otsu's thresholding on a denoised grayscale image.
@@ -260,3 +370,25 @@ def unsharp_masking(img_path, save_path):
 
     # Save the sharpened image
     cv2.imwrite(save_path, sharpened)
+
+class get_data_inference(Dataset):
+    '''
+    '''
+    def __init__(self, x_folder_name):
+        self.x_folder_name = x_folder_name
+        self.x_filenames = sorted(os.listdir(self.x_folder_name))
+    
+    def __len__(self):
+        return len(self.x_filenames)
+
+    def __getitem__(self, idx):
+        x_path = os.path.join(self.x_folder_name, self.x_filenames[idx])
+        x = np.array(Image.open(x_path))
+        
+        x_path = os.path.join(self.x_folder_name, self.x_filenames[idx])
+        x = Image.open(x_path)
+
+        to_tensor = transforms.ToTensor()
+        x = to_tensor(x)
+            
+        return x

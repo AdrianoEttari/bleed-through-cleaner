@@ -14,6 +14,8 @@ from sklearn.mixture import GaussianMixture
 from scipy.ndimage import gaussian_filter
 import warnings
 import shutil
+import time
+import csv
 
 class bleed_through_cleaner:
     def __init__(self, image_path, models_folder_path, device) -> None:
@@ -42,9 +44,13 @@ class bleed_through_cleaner:
         model_page_extractor.load_state_dict(snapshot["MODEL_STATE"])
         model_page_extractor = model_page_extractor.to(self.device)
         model_page_extractor.eval()
+
         transform = transforms.Compose([transforms.ToTensor(),])
         input_image_rescaled_tensor = transform(input_image_rescaled).unsqueeze(0).to(self.device)
-        mask_page = model_page_extractor(input_image_rescaled_tensor)[0].permute(1,2,0).squeeze(2).detach().cpu().numpy()
+        with torch.no_grad():
+            start = time.time()
+            mask_page = model_page_extractor(input_image_rescaled_tensor)[0].permute(1,2,0).squeeze(2).detach().cpu().numpy()
+            page_GPU_time = time.time() - start
 
         otsu_mask_page = otsu_thresholding(mask_page) 
 
@@ -70,7 +76,7 @@ class bleed_through_cleaner:
         otsu_mask_cleaned = Image.fromarray(otsu_mask_cleaned).resize((self.image.size[0], self.image.size[1]))
         otsu_mask_cleaned = np.array(otsu_mask_cleaned)[y_up:y_down, x_left:x_right]
         page_filtered_image = np.array(self.image)[y_up:y_down, x_left:x_right]
-        return page_filtered_image, otsu_mask_cleaned
+        return page_filtered_image, otsu_mask_cleaned, page_GPU_time
 
     def page_filter(self, mask_page):
         '''
@@ -155,13 +161,10 @@ class bleed_through_cleaner:
         model = model.to(self.device)
         model.eval()
 
-        final_pred = aggregation_sampling.aggregation_sampling(model, model_name)
-        # final_pred = (final_pred-final_pred.min())/(final_pred.max()-final_pred.min())*255 
-        # final_pred = final_pred.to(torch.uint8)
-        # final_pred = Image.fromarray(final_pred[0].permute(1,2,0).detach().cpu().numpy())
-        # final_pred = final_pred.filter(ImageFilter.GaussianBlur(radius=1.5))
+        with torch.no_grad():
+            final_pred, ornament_gpu_time = aggregation_sampling.aggregation_sampling(model, model_name) #################### CODE TO CHECK THE GPU TIME
 
-        ornament_mask = final_pred[0].permute(1,2,0).detach().cpu().numpy()[:,:,0] # it has 3 channels but they are the same
+        ornament_mask = final_pred.permute(1,2,0).detach().cpu().numpy()[:,:,0] # it has 3 channels but they are the same
 
         # For the ornament mask is better to use the classic thresholding instead of using the otsu thresholding (empirical motivation).
         threshold_ornament_mask = ornament_mask > 0.6  
@@ -170,7 +173,7 @@ class bleed_through_cleaner:
         threshold_ornament_mask_cleaned = cv2.morphologyEx(threshold_ornament_mask, cv2.MORPH_OPEN, kernel)
         threshold_ornament_mask_cleaned = cv2.morphologyEx(threshold_ornament_mask_cleaned, cv2.MORPH_CLOSE, kernel)
 
-        return 255-threshold_ornament_mask_cleaned*255 # The mask has 0 value for the ornaments and 255 for the background 
+        return 255-threshold_ornament_mask_cleaned*255, ornament_gpu_time # The mask has 0 value for the ornaments and 255 for the background 
 
     def text_detect(self, aggregation_sampling, model_name):
         '''
@@ -187,7 +190,7 @@ class bleed_through_cleaner:
             * Some more post-processing is performed using morphological operations to clean the mask. Specifically we use opening that is erosion
             followed by dilation and closing that is dilation followed by erosion.
         '''
-        input_channels = aggregation_sampling.patches_lr[0].shape[1]
+        input_channels = 3
         snapshot_path = os.path.join(self.models_folder_path, model_name, 'snapshot.pt')
         model = Residual_Attention_UNet(image_channels=input_channels, out_dim=1, device=self.device).to(self.device)
         snapshot = torch.load(snapshot_path,map_location=torch.device('cpu'), weights_only=True)
@@ -195,24 +198,16 @@ class bleed_through_cleaner:
         model = model.to(self.device)
         model.eval()
 
-        final_pred = aggregation_sampling.aggregation_sampling(model, model_name)
+        with torch.no_grad():
+            final_pred, text_GPU_time = aggregation_sampling.aggregation_sampling(model, model_name) #################### CODE TO CHECK THE GPU TIME
 
-        # final_pred = (final_pred-final_pred.min())/(final_pred.max()-final_pred.min())*255 ########## TO BE MODIFIED ##########
-
-        # final_pred = final_pred[0].permute(1,2,0).detach().cpu().numpy()[:,:,0]*255
-        # final_pred = Image.fromarray(final_pred.astype(np.uint8))
-        # final_pred = final_pred.filter(ImageFilter.GaussianBlur(radius=1.5))
-        # text_mask = np.array(final_pred)
-
-        text_mask = final_pred[0].permute(1,2,0).detach().cpu().numpy()[:,:,0]*255 # it has 3 channels but they are the same
+        text_mask = final_pred.permute(1,2,0).detach().cpu().numpy()[:,:,0]*255 # it has 3 channels but they are the same
         text_mask = text_mask.astype(np.uint8)
    
-        # thresholded_text_mask = cv2.adaptiveThreshold(text_mask, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        #                                   cv2.THRESH_BINARY, blockSize=21, C=4) 
 
         ret,thresholded_text_mask = cv2.threshold(text_mask,50,255,cv2.THRESH_BINARY)
 
-        return thresholded_text_mask
+        return thresholded_text_mask, text_GPU_time #################### CODE TO CHECK THE GPU TIME
 
     def bleed_through_finder(self,
                                 page_extraction_model_name='Residual_attention_UNet_page_extraction',
@@ -234,8 +229,10 @@ class bleed_through_cleaner:
         '''
         patch_size = 400
         stride = 100
+        batch_size = 16
+
         if page_extraction_model_name:
-            page_filtered_image, mask_page = self.page_extract(page_extraction_model_name)
+            page_filtered_image, mask_page, page_GPU_time = self.page_extract(page_extraction_model_name)
         
             if page_filtered_image.shape[0] < patch_size or page_filtered_image.shape[1] < patch_size:
                 raise ValueError('The page filtered image is smaller than 400 pixels in one of the two dimensions. You can deactivate the page filtering (by writing None in the page_extraction_model_name argument) if the original image is bigger than 400 in both dimensions.')
@@ -244,20 +241,21 @@ class bleed_through_cleaner:
             page_filtered_image = np.array(self.image)
         
         transform = transforms.Compose([transforms.ToTensor()])
-        page_filtered_image_tensor = transform(page_filtered_image).unsqueeze(0).to(self.device)
+        page_filtered_image_tensor = transform(page_filtered_image).to(self.device)
 
-        if page_filtered_image_tensor.shape[2] < patch_size or page_filtered_image_tensor.shape[3] < patch_size:
-            target = min([page_filtered_image_tensor.shape[2], page_filtered_image_tensor.shape[3]])
+        if page_filtered_image_tensor.shape[1] < patch_size or page_filtered_image_tensor.shape[2] < patch_size:
+            target = min([page_filtered_image_tensor.shape[1], page_filtered_image_tensor.shape[2]])
             possible_patch_size = np.arange(50,target,50)
             differences = []
+
             for i in possible_patch_size:
                 differences.append(target-i)
             patch_size = possible_patch_size[np.argmin(differences)]
             stride = patch_size // 4
             warnings.warn(f"The patch size for this picture has been changed from 400 to {patch_size} because of the shape of the image")
             
-        aggregation_sampling = split_aggregation_sampling(img_lr=page_filtered_image_tensor, patch_size=patch_size, stride=stride, magnification_factor=1, device=self.device, multiple_gpus=False)
-        ornament_mask = self.ornament_detect(aggregation_sampling, ornament_model_name)
+        aggregation_sampling = split_aggregation_sampling(img_lr=page_filtered_image_tensor, patch_size=patch_size, stride=stride, batch_size=batch_size, magnification_factor=1, device=self.device, multiple_gpus=False)
+        ornament_mask, ornament_GPU_time = self.ornament_detect(aggregation_sampling, ornament_model_name)
 
         if 'HSV' in text_model_name:
             page_filtered_image = Image.fromarray(page_filtered_image).convert('HSV')
@@ -267,7 +265,7 @@ class bleed_through_cleaner:
             x_LAB = cv2.cvtColor(np.array(Image.fromarray(page_filtered_image)), cv2.COLOR_RGB2LAB)
             page_filtered_image = np.concatenate((x_LAB, x_HSV[:,:,2][:,:,None]), axis=2)
 
-        text_mask = self.text_detect(aggregation_sampling, text_model_name)
+        text_mask, text_GPU_time = self.text_detect(aggregation_sampling, text_model_name)
 
         FINAL_BLEED_THROUGH_MASK = np.zeros((page_filtered_image.shape[0], page_filtered_image.shape[1]))
         FINAL_BLEED_THROUGH_MASK += ornament_mask
@@ -281,7 +279,9 @@ class bleed_through_cleaner:
             x_LAB = page_filtered_image[:,:,:3]
             page_filtered_image_RGB = cv2.cvtColor(x_LAB, cv2.COLOR_LAB2RGB)
         
-        return page_filtered_image, FINAL_BLEED_THROUGH_MASK
+        total_GPU_time = page_GPU_time + ornament_GPU_time + text_GPU_time
+
+        return page_filtered_image, FINAL_BLEED_THROUGH_MASK, total_GPU_time
 
     def median_image_inpainting(self,
                                 page_extraction_model_name='Residual_attention_UNet_page_extraction',
@@ -303,13 +303,13 @@ class bleed_through_cleaner:
                 page_filtered_image = np.array(Image.open(page_filtered_save_path))
                 mask = np.array(Image.open(mask_bleed_through_save_path))
             else:
-                page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+                page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                                 ornament_model_name=ornament_model_name,
                                                 text_model_name=text_model_name)
                 Image.fromarray(page_filtered_image).save(page_filtered_save_path)
                 Image.fromarray(mask).save(mask_bleed_through_save_path)
         else:
-            page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+            page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                             ornament_model_name=ornament_model_name,
                                             text_model_name=text_model_name)
 
@@ -326,7 +326,7 @@ class bleed_through_cleaner:
         # axs[1].imshow(cleaned_image, cmap='gray')
         # axs[1].set_title('Inpainted Image')
         # plt.show()
-        return cleaned_image
+        return cleaned_image, GPU_time
     
     def GMM_image_inpainting(self,
                                 page_extraction_model_name='Residual_attention_UNet_page_extraction',
@@ -352,13 +352,13 @@ class bleed_through_cleaner:
                 page_filtered_image = np.array(Image.open(page_filtered_save_path))
                 mask = np.array(Image.open(mask_bleed_through_save_path))
             else:
-                page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+                page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                                 ornament_model_name=ornament_model_name,
                                                 text_model_name=text_model_name)
                 Image.fromarray(page_filtered_image).save(page_filtered_save_path)
                 Image.fromarray(mask).save(mask_bleed_through_save_path)
         else:
-            page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+            page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                             ornament_model_name=ornament_model_name,
                                             text_model_name=text_model_name)
 
@@ -416,7 +416,7 @@ class bleed_through_cleaner:
             x_LAB = inpainted_image[:,:,:3]
             inpainted_image = cv2.cvtColor(x_LAB, cv2.COLOR_LAB2RGB)
 
-        return inpainted_image
+        return inpainted_image, GPU_time
     
     def biweight_image_inpainting(self,
                                 page_extraction_model_name='Residual_attention_UNet_page_extraction',
@@ -454,13 +454,13 @@ class bleed_through_cleaner:
                 page_filtered_image = np.array(Image.open(page_filtered_save_path))
                 mask = np.array(Image.open(mask_bleed_through_save_path))
             else:
-                page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+                page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                                 ornament_model_name=ornament_model_name,
                                                 text_model_name=text_model_name)
                 Image.fromarray(page_filtered_image).save(page_filtered_save_path)
                 Image.fromarray(mask).save(mask_bleed_through_save_path)
         else:
-            page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+            page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                             ornament_model_name=ornament_model_name,
                                             text_model_name=text_model_name)
 
@@ -540,7 +540,7 @@ class bleed_through_cleaner:
             x_LAB = inpainted_image[:,:,:3]
             inpainted_image = cv2.cvtColor(x_LAB, cv2.COLOR_LAB2RGB)
 
-        return inpainted_image
+        return inpainted_image, GPU_time
     
     def NLM_image_inpainting(self,
                             page_extraction_model_name='Residual_attention_UNet_page_extraction',
@@ -565,9 +565,6 @@ class bleed_through_cleaner:
             raise ValueError('templateWindowSize must be odd')
 
         if save_folder_path_mask_page:
-            # page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_page_filtered.png')
-            # mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_BLEED_THROUGH_MASK.png')
-           
             page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0] +'_page_filtered.png')
             mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0] +'_BLEED_THROUGH_MASK.png')
  
@@ -575,18 +572,19 @@ class bleed_through_cleaner:
                 page_filtered_image = np.array(Image.open(page_filtered_save_path))
                 mask = np.array(Image.open(mask_bleed_through_save_path))
             else:
-                page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+                page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                 ornament_model_name=ornament_model_name,
                                 text_model_name=text_model_name)
                 Image.fromarray(page_filtered_image).save(page_filtered_save_path)
                 Image.fromarray(mask).save(mask_bleed_through_save_path)
         else:
-            page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+            page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                             ornament_model_name=ornament_model_name,
                                             text_model_name=text_model_name)
 
         image_to_inpaint = page_filtered_image.copy()
 
+        start = time.time()
         if color_filter_strength:
             print("NLM Color filter strength is used")
             nlm_denoised_image = cv2.fastNlMeansDenoisingColored(image_to_inpaint, None, h=filter_strength, hColor=color_filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
@@ -596,8 +594,9 @@ class bleed_through_cleaner:
 
         pixels_not_to_inpaint = page_filtered_image[mask == 0]
         nlm_denoised_image[mask == 0] = pixels_not_to_inpaint
-        return nlm_denoised_image
-    
+        NLM_time = time.time() - start
+        print(f"It tooks {NLM_time:.2f} seconds to perform NLM!")
+        return nlm_denoised_image, GPU_time
     
     def Gaussian_denoise_image_inpainting(self,
                             page_extraction_model_name='Residual_attention_UNet_page_extraction',
@@ -626,13 +625,13 @@ class bleed_through_cleaner:
                 page_filtered_image = np.array(Image.open(page_filtered_save_path))
                 mask = np.array(Image.open(mask_bleed_through_save_path))
             else:
-                page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+                page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                 ornament_model_name=ornament_model_name,
                                 text_model_name=text_model_name)
                 Image.fromarray(page_filtered_image).save(page_filtered_save_path)
                 Image.fromarray(mask).save(mask_bleed_through_save_path)
         else:
-            page_filtered_image, mask = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
+            page_filtered_image, mask, GPU_time = self.bleed_through_finder(page_extraction_model_name=page_extraction_model_name,
                                             ornament_model_name=ornament_model_name,
                                             text_model_name=text_model_name)
 
@@ -648,36 +647,30 @@ class bleed_through_cleaner:
             gaussian_denoised_image[mask == 0] = pixels_not_to_inpaint
 
             image_to_inpaint[:,:,channel] = gaussian_denoised_image
-        return image_to_inpaint
+        return image_to_inpaint, GPU_time
 
 if __name__ == "__main__":
-    # img_names = os.listdir(os.path.join('DIBCO_DATA','DIBCO2019'))
-    # img_names = os.listdir(os.path.join('Bleed_Through_Database', 'rgb'))
-    # img_names = os.listdir(os.path.join("4C1_PALLADIUS_FUSCUS"))
-    # img_names = ['CNMD0000263308_0170_Carta_82v.jpg', 'CNMD0000263308_0111_Carta_53r.jpg', 'CNMD0000263308_0068_Carta_31v.jpg', "CNMD0000263308_0278_Carta_136v.jpg", "CNMD0000263308_0288_Carta_141v.jpg"]
-    img_names = ['CNMD0000263308_0090_Carta_42v.jpg']
+    # img_names = ['CNMD0000263308_0090_Carta_42v.jpg']
+    img_names = os.listdir("5d41_sannazaro_le_rime")[:10]
+    timing_data = []
 
     for img_name in img_names:
-        # image_path = os.path.join('DIBCO_DATA','DIBCO2019',img_name)
-        # image_path = os.path.join(os.path.join('Bleed_Through_Database', 'rgb', img_name))
-        image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
-        # image_path = os.path.join("Firenze_BibliotecaMediceaLaurenziana_Plut_40_1", img_name)
-        # image_path = os.path.join("4C1_PALLADIUS_FUSCUS", img_name)
-
+        # image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
+        image_path = os.path.join("5d41_sannazaro_le_rime", img_name)
+        
         models_folder_path = 'models_CHECKING_2019'
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
-        # device = 'mps'
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
         print('Using device:', device)
 
         cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
 
-        save_folder_path = 'TO_REMOVE_folder'
-        # save_folder_path = 'assets'
-        # save_folder_path = os.path.join('TO_REMOVE_folder', 'cleaned_rgb')
-        # save_folder_path = '4C1_PALLADIUS_FUSCUS_cleaned'
-        # save_folder_path = os.path.join("DIBCO_evaluation", "DIBCO_DATA_until_2019_pred_400_epochs", "Images", "DIBCO2019")
+        save_folder_path = '5d41_sannazaro_le_rime_CLEANED'
 
-        mask_page_folder_path = save_folder_path # Use None if you don't want to save the mask and the page
+        # None if you don't want to save the mask and the page
+        # mask_page_folder_path = save_folder_path 
+        mask_page_folder_path = None
+
         os.makedirs(save_folder_path, exist_ok=True)
 
         ornament_model_name = "Residual_attention_UNet_ornament_extraction"
@@ -686,81 +679,30 @@ if __name__ == "__main__":
         # text_model_name = "Residual_attention_UNet_text_extraction"
         # page_extraction_model_name = None
         page_extraction_model_name = "Residual_attention_UNet_page_extraction"
-
-        # cleaned_image = cleaner.median_image_inpainting(save_folder_path_mask_page = mask_page_folder_path,
-        #                                                             ornament_model_name=ornament_model_name,
-        #                                                             text_model_name=text_model_name,
-        #                                                             page_extraction_model_name = page_extraction_model_name
-        #                                                             )
-        # extension = img_name.split('.')[-1]
-        # new_name = img_name.replace('.'+extension,'')+'_median.png'
-        # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
-
-        # cleaned_image = cleaner.biweight_image_inpainting(ornament_model_name=ornament_model_name,
-        #                                                            text_model_name=text_model_name,
-        #                                                            page_extraction_model_name = page_extraction_model_name,
-        #                                                                 sigma_clip_sigma=None, sigma_clip_sigma_lower=1.5, 
-        #                                                                 sigma_clip_sigma_upper=2, sigma_clip_maxiters=3,
-        #                                                                 save_folder_path_mask_page = mask_page_folder_path)
-        # extension = img_name.split('.')[-1]
-        # new_name = img_name.replace('.'+extension,'')+'_biweight.png'
-        # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
-
-
-        # cleaned_image = cleaner.GMM_image_inpainting(ornament_model_name=ornament_model_name,
-        #                                                            text_model_name=text_model_name,
-        #                                                            page_extraction_model_name=page_extraction_model_name,
-        #                                                             save_folder_path_mask_page = mask_page_folder_path)
-        # extension = img_name.split('.')[-1]
-        # new_name = img_name.replace('.'+extension,'')+'_GMM.png'
-        # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
-
-        # for filter_strength in [5,6,7,8,9,10]:
-        #     for color_filter_strength in [10,20,30]:
-        #         for templateWindowSize in [11, 15, 21]:
-        #             for searchWindowSize in [35, 45, 55]:
-        #                 cleaned_image = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
-        #                                                                         text_model_name=text_model_name,
-        #                                                                         page_extraction_model_name=page_extraction_model_name,
-        #                                                                             filter_strength=filter_strength, color_filter_strength=color_filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize,
-        #                                                                         save_folder_path_mask_page = mask_page_folder_path)
-        #                 # new_name = img_folder.split('_')[0]+'_'+img_name.split('_')[1]+'_NLM.png'
-        #                 new_name = f'{img_name}_NLM_{filter_strength}_{color_filter_strength}_{templateWindowSize}_{searchWindowSize}.png'
-        #                 Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
-    
-        num_smoothings = 1
             
-        cleaned_image = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
+        start = time.time()
+        cleaned_image, GPU_time = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
                                                         text_model_name=text_model_name,
                                                         page_extraction_model_name=page_extraction_model_name,
-                                                            # filter_strength=6, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
-                                                            filter_strength=8, color_filter_strength=20, templateWindowSize=25, searchWindowSize=55,
+                                                            filter_strength=6, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
+                                                            # filter_strength=8, color_filter_strength=20, templateWindowSize=25, searchWindowSize=55,
                                                         save_folder_path_mask_page = mask_page_folder_path)
+        total_time = time.time()-start
 
         extension = img_name.split('.')[-1]
-        new_name = img_name.replace('.'+extension,'')+'_NLM_strong.png'
+        new_name = img_name.replace('.'+extension,'')+'_NLM.png'
         Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
-        
-        if num_smoothings > 1:
-            for _ in range(num_smoothings):
-                os.rename(os.path.join(save_folder_path, new_name), os.path.join(save_folder_path, new_name.replace('_NLM.png', '.png')))
-                os.rename(os.path.join(save_folder_path, new_name.replace('_NLM.png', '_page_filtered.png')), os.path.join(save_folder_path, new_name.replace('_NLM.png', '_page_filtered_old.png')))
-                shutil.copy(os.path.join(save_folder_path, new_name.replace('_NLM.png', '.png')), os.path.join(save_folder_path, new_name.replace('_NLM.png', '_page_filtered.png')))
-                image_path  = os.path.join(save_folder_path, new_name.replace('_NLM.png', '.png'))
-                cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
-                cleaned_image = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
-                                                            text_model_name=text_model_name,
-                                                            page_extraction_model_name=page_extraction_model_name,
-                                                                # filter_strength=6, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
-                                                                filter_strength=8, color_filter_strength=20, templateWindowSize=25, searchWindowSize=55,
-                                                            save_folder_path_mask_page = mask_page_folder_path)
-                Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
-            os.remove(os.path.join(save_folder_path, new_name.replace('_NLM.png', '.png')))
 
-        # cleaned_image = cleaner.Gaussian_denoise_image_inpainting(sigma=5, save_folder_path_mask_page = mask_page_folder_path)
-        # extension = img_name.split('.')[-1]
-        # new_name = img_name.replace('.'+extension,'')+'_GaussDenoise.png'
-        # Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+        timing_data.append([img_name, GPU_time, total_time])
+        
+    csv_file_path = os.path.join(save_folder_path, 'processing_times.csv')
+    with open(csv_file_path, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Image Name", "GPU Usage Time (s)", "Total Time (s)"])
+        writer.writerows(timing_data)
+    print(f"Processing times saved to {csv_file_path}")
+        
+
 
 
 

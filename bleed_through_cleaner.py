@@ -229,7 +229,7 @@ class bleed_through_cleaner:
         '''
         patch_size = 400
         stride = 100
-        batch_size = 16
+        batch_size = 32
 
         if page_extraction_model_name:
             page_filtered_image, mask_page, page_GPU_time = self.page_extract(page_extraction_model_name)
@@ -649,50 +649,50 @@ class bleed_through_cleaner:
             image_to_inpaint[:,:,channel] = gaussian_denoised_image
         return image_to_inpaint, GPU_time
 
-if __name__ == "__main__":
-    # img_names = ['CNMD0000263308_0090_Carta_42v.jpg']
-    img_names = os.listdir("5d41_sannazaro_le_rime")[:10]
+def manuscript_cleaning_and_timing_NLM(folder_data_path, 
+                                    save_mask=True,
+                                        ornament_model_name="Residual_attention_UNet_ornament_extraction",
+                                        text_model_name = "Residual_attention_UNet_text_extraction_finetuning_400_epochs",
+                                        page_extraction_model_name = "Residual_attention_UNet_page_extraction",
+                                        NLM_strong=False,
+                                        ):
+
+    img_names = os.listdir(folder_data_path)
+    models_folder_path = 'models_CHECKING_2019'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+    print('Using device:', device)
     timing_data = []
 
-    for img_name in img_names:
-        # image_path = os.path.join("Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", img_name)
-        image_path = os.path.join("5d41_sannazaro_le_rime", img_name)
-        
-        models_folder_path = 'models_CHECKING_2019'
+    save_folder_path = os.path.join(folder_data_path+"_CLEANED")
+    os.makedirs(save_folder_path, exist_ok=True)
 
-        device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
-        print('Using device:', device)
-
-        cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
-
-        save_folder_path = '5d41_sannazaro_le_rime_CLEANED'
-
-        # None if you don't want to save the mask and the page
-        # mask_page_folder_path = save_folder_path 
+    # None if you don't want to save the mask and the page
+    if save_mask:
+        mask_page_folder_path = save_folder_path
+    else:
         mask_page_folder_path = None
-
-        os.makedirs(save_folder_path, exist_ok=True)
-
-        ornament_model_name = "Residual_attention_UNet_ornament_extraction"
-        # ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
-        text_model_name = "Residual_attention_UNet_text_extraction_finetuning_400_epochs"
-        # text_model_name = "Residual_attention_UNet_text_extraction"
-        # page_extraction_model_name = None
-        page_extraction_model_name = "Residual_attention_UNet_page_extraction"
-            
+    
+    for img_name in img_names:
+        image_path = os.path.join(folder_data_path, img_name)
+        cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
         start = time.time()
-        cleaned_image, GPU_time = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
-                                                        text_model_name=text_model_name,
-                                                        page_extraction_model_name=page_extraction_model_name,
-                                                            filter_strength=6, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
-                                                            # filter_strength=8, color_filter_strength=20, templateWindowSize=25, searchWindowSize=55,
-                                                        save_folder_path_mask_page = mask_page_folder_path)
+        if NLM_strong:
+            cleaned_image, GPU_time = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
+                                                            text_model_name=text_model_name,
+                                                            page_extraction_model_name=page_extraction_model_name,
+                                                                filter_strength=8, color_filter_strength=20, templateWindowSize=25, searchWindowSize=55,
+                                                            save_folder_path_mask_page = mask_page_folder_path)
+        else:
+            cleaned_image, GPU_time = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
+                                                            text_model_name=text_model_name,
+                                                            page_extraction_model_name=page_extraction_model_name,
+                                                                filter_strength=6, color_filter_strength=20, templateWindowSize=15, searchWindowSize=35,
+                                                            save_folder_path_mask_page = mask_page_folder_path)
         total_time = time.time()-start
 
         extension = img_name.split('.')[-1]
         new_name = img_name.replace('.'+extension,'')+'_NLM.png'
         Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
-
         timing_data.append([img_name, GPU_time, total_time])
         
     csv_file_path = os.path.join(save_folder_path, 'processing_times.csv')
@@ -701,6 +701,25 @@ if __name__ == "__main__":
         writer.writerow(["Image Name", "GPU Usage Time (s)", "Total Time (s)"])
         writer.writerows(timing_data)
     print(f"Processing times saved to {csv_file_path}")
+
+if __name__ == "__main__":
+
+    folder_data_path = "5d41_sannazaro_le_rime"
+    ornament_model_name = "Residual_attention_UNet_ornament_extraction"
+    # ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
+    text_model_name = "Residual_attention_UNet_text_extraction_finetuning_400_epochs"
+    # text_model_name = "Residual_attention_UNet_text_extraction"
+    # page_extraction_model_name = None
+    page_extraction_model_name = "Residual_attention_UNet_page_extraction"
+
+    manuscript_cleaning_and_timing_NLM(folder_data_path, 
+                                    save_mask=False,
+                                        ornament_model_name=ornament_model_name,
+                                        text_model_name = text_model_name,
+                                        page_extraction_model_name = page_extraction_model_name,
+                                        NLM_strong=False)
+                                        
+
         
 
 

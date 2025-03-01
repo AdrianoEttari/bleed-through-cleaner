@@ -229,7 +229,7 @@ class bleed_through_cleaner:
         '''
         patch_size = 400
         stride = 100
-        batch_size = 32
+        batch_size = 16
 
         if page_extraction_model_name:
             page_filtered_image, mask_page, page_GPU_time = self.page_extract(page_extraction_model_name)

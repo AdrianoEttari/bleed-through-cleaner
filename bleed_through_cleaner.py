@@ -704,7 +704,8 @@ def manuscript_cleaning_and_timing_NLM(folder_data_path,
 
 if __name__ == "__main__":
 
-    folder_data_path = "5d41_sannazaro_le_rime"
+    folder_data_path = os.path.join("books","5d41_sannazaro_le_rime")
+    # folder_data_path = os.path.join("TO_REMOVE_folder")
     ornament_model_name = "Residual_attention_UNet_ornament_extraction"
     # ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
     text_model_name = "Residual_attention_UNet_text_extraction_finetuning_400_epochs"

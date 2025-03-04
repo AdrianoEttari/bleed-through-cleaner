@@ -66,6 +66,7 @@ upper_boundary = foreground_median + foreground_mad
 lower_boundary = foreground_median - foreground_mad
 
 # Plot errors
+plt.figure(figsize=(10, 6))
 plt.plot(np.arange(len(foreground_errors)), foreground_errors, marker='o', label='Foreground Error', color='blue')
 plt.plot(np.arange(len(background_errors)), background_errors, marker='o', label='Background Error', color='orange')
 plt.plot(np.arange(len(weighted_total_errors)), weighted_total_errors, marker='o', label='Weighted Total Error', color='gray')
@@ -84,7 +85,9 @@ plt.fill_between(np.arange(len(foreground_errors)), lower_boundary, upper_bounda
 plt.xticks(np.arange(len(foreground_errors)))
 plt.ylabel("Error (ratio)")
 plt.xlabel("Image number")
-plt.legend()
+plt.xlim(-1, 20)  # Adjust the values as needed
+plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+plt.tight_layout()
 plt.show()
 
 # def mad(x):

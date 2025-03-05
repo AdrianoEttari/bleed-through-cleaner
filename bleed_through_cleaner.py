@@ -18,11 +18,14 @@ import time
 import csv
 
 class bleed_through_cleaner:
-    def __init__(self, image_path, models_folder_path, device) -> None:
+    def __init__(self, image_path, models_folder_path, GPU_timing, device) -> None:
         self.image_path = image_path
         self.image = Image.open(image_path)
         self.models_folder_path = models_folder_path
+        self.GPU_timing = GPU_timing
         self.device = device
+        if torch.backends.mps.is_available() and GPU_timing:
+            raise ValueError("You cannot compute the GPU timing with device='mps'. Switch GPU_timing to False")
 
     def page_extract(self, model_name):
         '''
@@ -47,10 +50,29 @@ class bleed_through_cleaner:
 
         transform = transforms.Compose([transforms.ToTensor(),])
         input_image_rescaled_tensor = transform(input_image_rescaled).unsqueeze(0).to(self.device)
+
         with torch.no_grad():
-            start = time.time()
-            mask_page = model_page_extractor(input_image_rescaled_tensor)[0].permute(1,2,0).squeeze(2).detach().cpu().numpy()
-            page_GPU_time = time.time() - start
+            if self.GPU_timing:
+            # Record events for timing the GPU processing
+                start_event = torch.cuda.Event(enable_timing=True)
+                end_event = torch.cuda.Event(enable_timing=True)
+                # Synchronize to ensure the previous operations are complete
+                torch.cuda.synchronize()
+                # Start recording the GPU time
+                start_event.record()
+            # Perform inference on the input image
+            mask_page = model_page_extractor(input_image_rescaled_tensor)
+            if self.GPU_timing:
+                # End recording the GPU time
+                end_event.record()
+                # Synchronize to ensure the GPU operations have finished
+                torch.cuda.synchronize()
+                # Calculate GPU time in milliseconds
+                page_GPU_time = start_event.elapsed_time(end_event) / 1000  # Convert to seconds
+            else:
+                page_GPU_time = None
+            # Detach and move the result to CPU for further processing
+            mask_page = mask_page[0].permute(1, 2, 0).squeeze(2).detach().cpu().numpy()
 
         otsu_mask_page = otsu_thresholding(mask_page) 
 
@@ -162,7 +184,7 @@ class bleed_through_cleaner:
         model.eval()
 
         with torch.no_grad():
-            final_pred, ornament_gpu_time = aggregation_sampling.aggregation_sampling(model, model_name) #################### CODE TO CHECK THE GPU TIME
+            final_pred, ornament_gpu_time = aggregation_sampling.aggregation_sampling(model, model_name, self.GPU_timing) 
 
         ornament_mask = final_pred.permute(1,2,0).detach().cpu().numpy()[:,:,0] # it has 3 channels but they are the same
 
@@ -199,7 +221,7 @@ class bleed_through_cleaner:
         model.eval()
 
         with torch.no_grad():
-            final_pred, text_GPU_time = aggregation_sampling.aggregation_sampling(model, model_name) #################### CODE TO CHECK THE GPU TIME
+            final_pred, text_GPU_time = aggregation_sampling.aggregation_sampling(model, model_name, self.GPU_timing) 
 
         text_mask = final_pred.permute(1,2,0).detach().cpu().numpy()[:,:,0]*255 # it has 3 channels but they are the same
         text_mask = text_mask.astype(np.uint8)
@@ -207,7 +229,7 @@ class bleed_through_cleaner:
 
         ret,thresholded_text_mask = cv2.threshold(text_mask,50,255,cv2.THRESH_BINARY)
 
-        return thresholded_text_mask, text_GPU_time #################### CODE TO CHECK THE GPU TIME
+        return thresholded_text_mask, text_GPU_time 
 
     def bleed_through_finder(self,
                                 page_extraction_model_name='Residual_attention_UNet_page_extraction',
@@ -229,7 +251,7 @@ class bleed_through_cleaner:
         '''
         patch_size = 400
         stride = 100
-        batch_size = 16
+        batch_size = 64
 
         if page_extraction_model_name:
             page_filtered_image, mask_page, page_GPU_time = self.page_extract(page_extraction_model_name)
@@ -279,7 +301,10 @@ class bleed_through_cleaner:
             x_LAB = page_filtered_image[:,:,:3]
             page_filtered_image_RGB = cv2.cvtColor(x_LAB, cv2.COLOR_LAB2RGB)
         
-        total_GPU_time = page_GPU_time + ornament_GPU_time + text_GPU_time
+        if self.GPU_timing:
+            total_GPU_time = page_GPU_time + ornament_GPU_time + text_GPU_time
+        else:
+            total_GPU_time = None
 
         return page_filtered_image, FINAL_BLEED_THROUGH_MASK, total_GPU_time
 
@@ -655,6 +680,7 @@ def manuscript_cleaning_and_timing_NLM(folder_data_path,
                                         text_model_name = "Residual_attention_UNet_text_extraction_finetuning_400_epochs",
                                         page_extraction_model_name = "Residual_attention_UNet_page_extraction",
                                         NLM_strong=False,
+                                        GPU_timing=False
                                         ):
 
     img_names = os.listdir(folder_data_path)
@@ -663,7 +689,8 @@ def manuscript_cleaning_and_timing_NLM(folder_data_path,
     print('Using device:', device)
     timing_data = []
 
-    save_folder_path = os.path.join(folder_data_path+"_CLEANED")
+    unique_id = str(int(time.time()))
+    save_folder_path = os.path.join(folder_data_path + "_CLEANED_" + unique_id)
     os.makedirs(save_folder_path, exist_ok=True)
 
     # None if you don't want to save the mask and the page
@@ -674,7 +701,7 @@ def manuscript_cleaning_and_timing_NLM(folder_data_path,
     
     for img_name in img_names:
         image_path = os.path.join(folder_data_path, img_name)
-        cleaner = bleed_through_cleaner(image_path, models_folder_path, device)
+        cleaner = bleed_through_cleaner(image_path, models_folder_path, GPU_timing, device)
         start = time.time()
         if NLM_strong:
             cleaned_image, GPU_time = cleaner.NLM_image_inpainting(ornament_model_name=ornament_model_name,
@@ -693,14 +720,16 @@ def manuscript_cleaning_and_timing_NLM(folder_data_path,
         extension = img_name.split('.')[-1]
         new_name = img_name.replace('.'+extension,'')+'_NLM.png'
         Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
-        timing_data.append([img_name, GPU_time, total_time])
-        
-    csv_file_path = os.path.join(save_folder_path, 'processing_times.csv')
-    with open(csv_file_path, mode='w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(["Image Name", "GPU Usage Time (s)", "Total Time (s)"])
-        writer.writerows(timing_data)
-    print(f"Processing times saved to {csv_file_path}")
+        if GPU_timing:
+            timing_data.append([img_name, GPU_time, total_time])
+
+    if GPU_timing:   
+        csv_file_path = os.path.join(save_folder_path, 'processing_times.csv')
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Image Name", "GPU Usage Time (s)", "Total Time (s)"])
+            writer.writerows(timing_data)
+        print(f"Processing times saved to {csv_file_path}")
 
 if __name__ == "__main__":
 
@@ -718,7 +747,8 @@ if __name__ == "__main__":
                                         ornament_model_name=ornament_model_name,
                                         text_model_name = text_model_name,
                                         page_extraction_model_name = page_extraction_model_name,
-                                        NLM_strong=False)
+                                        NLM_strong=False,
+                                        GPU_timing=True)
                                         
 
         

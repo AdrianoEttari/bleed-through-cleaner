@@ -76,7 +76,7 @@ class split_aggregation_sampling:
 
         return patches_lr, patches_sr_infos
 
-    def aggregation_sampling(self, model, model_name):
+    def aggregation_sampling(self, model, model_name, GPU_timing):
         '''
         This function iterates over the patches in self.patches_lr and for each patch it generates a super-resolution
         patch using the specified model. Afterwords it takes the product between the super-resolution patch and the gaussian weight
@@ -96,8 +96,8 @@ class split_aggregation_sampling:
         im_res = torch.zeros([channels, height*magnification_factor, width*magnification_factor], dtype=img_lr.dtype, device=self.device)
         pixel_count = torch.zeros([channels, height*magnification_factor, width*magnification_factor], dtype=img_lr.dtype, device=self.device)
         
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        folder_name = f'results_{model_name}_{timestamp}'
+        random_sequence = ''.join(np.random.choice(list('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghilmnopqrstuvz'), size=20))
+        folder_name = f'results_{model_name}_{random_sequence}'
 
         to_tensor = transforms.ToTensor()
         to_pil = transforms.ToPILImage()
@@ -106,12 +106,34 @@ class split_aggregation_sampling:
         counter = list(np.arange(len(self.patches_lr), 0, -1)-1)
         print(f"Generating {len(self.patches_lr)} patches")
 
-        for i, batch_patch_lr in tqdm(enumerate(self.data_loader_patches_lr), desc="Saving patches"):
-            start = time.time() #################### CODE TO CHECK THE GPU TIME
-            batch_patch_sr = self.model(batch_patch_lr)
-            GPU_time = time.time() - start #################### CODE TO CHECK THE GPU TIME
-            for patch_sr in batch_patch_sr:
-                to_pil(patch_sr).save(os.path.join(folder_name, str(counter.pop())+".png"))
+        if GPU_timing:
+            GPU_time = 0
+            for i, batch_patch_lr in tqdm(enumerate(self.data_loader_patches_lr), desc="Saving patches"):
+                batch_patch_lr = batch_patch_lr.to(self.device)
+                
+                start_event = torch.cuda.Event(enable_timing=True)
+                end_event = torch.cuda.Event(enable_timing=True)
+
+                torch.cuda.synchronize()  # Ensure previous operations are done
+                start_event.record()
+                batch_patch_sr = self.model(batch_patch_lr)
+                end_event.record()
+                torch.cuda.synchronize()
+
+                GPU_time_batch = start_event.elapsed_time(end_event) # Time in milliseconds
+                GPU_time += GPU_time_batch / 1000  # Convert to seconds
+
+                for patch_sr in batch_patch_sr:
+                    to_pil(patch_sr).save(os.path.join(folder_name, str(counter.pop())+".png"))
+        else:
+            GPU_time = None
+            for i, batch_patch_lr in tqdm(enumerate(self.data_loader_patches_lr), desc="Saving patches"):
+                batch_patch_lr = batch_patch_lr.to(self.device)
+
+                batch_patch_sr = self.model(batch_patch_lr)
+
+                for patch_sr in batch_patch_sr:
+                    to_pil(patch_sr).save(os.path.join(folder_name, str(counter.pop())+".png"))
         
         for i in tqdm(range(len(self.patches_lr)), desc="Collage patches"):
             patch_sr = to_tensor(Image.open(os.path.join(folder_name, str(i)+".png"))).to(self.device)
@@ -124,7 +146,7 @@ class split_aggregation_sampling:
         im_res /= pixel_count
         im_res = torch.clamp(im_res, 0, 1)
 
-        return im_res, GPU_time #################### CODE TO CHECK THE GPU TIME
+        return im_res, GPU_time
 
     def gaussian_weights(self, tile_width, tile_height, channels):
             """

@@ -144,8 +144,7 @@ def launch(args):
         device = int(os.environ["LOCAL_RANK"])
         torch.cuda.set_device(int(device))
     else:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # device = 'mps'
+        device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
         print(f"Using device: {device}")
 
     train_loader = prepare_data_loader(dataset_path, "train", multiple_gpus, batch_size)

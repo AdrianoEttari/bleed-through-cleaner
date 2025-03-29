@@ -65,29 +65,62 @@ foreground_mad = stats.median_abs_deviation(foreground_errors, scale=1)
 upper_boundary = foreground_median + foreground_mad
 lower_boundary = foreground_median - foreground_mad
 
-# Plot errors
-plt.figure(figsize=(10, 6))
-plt.plot(np.arange(len(foreground_errors)), foreground_errors, marker='o', label='Foreground Error', color='blue')
-plt.plot(np.arange(len(background_errors)), background_errors, marker='o', label='Background Error', color='orange')
-plt.plot(np.arange(len(weighted_total_errors)), weighted_total_errors, marker='o', label='Weighted Total Error', color='gray')
+# # Plot errors
+# plt.figure(figsize=(10, 6))
+# plt.plot(np.arange(len(foreground_errors)), foreground_errors, marker='o', label='Foreground Error', color='blue')
+# plt.plot(np.arange(len(background_errors)), background_errors, marker='o', label='Background Error', color='orange')
+# plt.plot(np.arange(len(weighted_total_errors)), weighted_total_errors, marker='o', label='Weighted Total Error', color='gray')
+
+# # Plot median line
+# plt.axhline(foreground_median, label='Median Foreground Error', linestyle='dashed', linewidth=2, color='blue')
+
+# # Plot upper and lower boundary lines
+# plt.axhline(upper_boundary, linestyle='dotted', linewidth=2, color='blue', label='Upper Bound (Median + MAD)')
+# plt.axhline(lower_boundary, linestyle='dotted', linewidth=2, color='blue', label='Lower Bound (Median - MAD)')
+
+# # Shaded region between upper and lower boundaries
+# plt.fill_between(np.arange(len(foreground_errors)), lower_boundary, upper_boundary, color='blue', alpha=0.2)
+
+# # Labels and legend
+# plt.xticks(np.arange(len(foreground_errors)))
+# plt.ylabel("Error (ratio)")
+# plt.xlabel("Image number")
+# plt.xlim(-1, 20)  # Adjust the values as needed
+# plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
+# plt.tight_layout()
+# plt.show()
+
+# Dummy data
+num_obs = len(foreground_errors)
+
+x = np.arange(num_obs)  # Observation indices
+bar_width = 0.25  # Width of each bar
+
+fig, ax = plt.subplots(figsize=(12, 6))
+
+# Plot each metric with an offset to avoid overlap
+ax.bar(x - bar_width, foreground_errors, width=bar_width, label='Foreground Error', color='blue')
+ax.bar(x, background_errors, width=bar_width, label='Background Error', color='orange')
+ax.bar(x + bar_width, weighted_total_errors, width=bar_width, label='Weighted Total Error', color='gray')
 
 # Plot median line
-plt.axhline(foreground_median, label='Median Foreground Error', linestyle='dashed', linewidth=2, color='blue')
+ax.axhline(foreground_median, label='Median Foreground Error', linestyle='dashed', linewidth=2, color='blue')
 
 # Plot upper and lower boundary lines
-plt.axhline(upper_boundary, linestyle='dotted', linewidth=2, color='blue', label='Upper Bound (Median + MAD)')
-plt.axhline(lower_boundary, linestyle='dotted', linewidth=2, color='blue', label='Lower Bound (Median - MAD)')
+ax.axhline(upper_boundary, linestyle='dotted', linewidth=2, color='blue', label='Upper Bound (Median + MAD)')
+ax.axhline(lower_boundary, linestyle='dotted', linewidth=2, color='blue', label='Lower Bound (Median - MAD)')
 
 # Shaded region between upper and lower boundaries
-plt.fill_between(np.arange(len(foreground_errors)), lower_boundary, upper_boundary, color='blue', alpha=0.2)
+ax.fill_between(x, lower_boundary, upper_boundary, color='blue', alpha=0.2)
 
-# Labels and legend
-plt.xticks(np.arange(len(foreground_errors)))
-plt.ylabel("Error (ratio)")
-plt.xlabel("Image number")
-plt.xlim(-1, 20)  # Adjust the values as needed
-plt.legend(loc='upper left', bbox_to_anchor=(1, 1))
-plt.tight_layout()
+# Formatting
+ax.set_xlabel("Image number")
+ax.set_ylabel("Error (ratio)")
+ax.set_xticks(x)
+ax.set_xticklabels([str(i) for i in x])
+ax.legend()
+ax.set_title("Grouped Bar Plot of Errors")
+
 plt.show()
 
 # def mad(x):

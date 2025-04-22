@@ -677,14 +677,14 @@ class bleed_through_cleaner:
 def manuscript_cleaning_and_timing_NLM(folder_data_path, 
                                     save_mask=True,
                                         ornament_model_name="Residual_attention_UNet_ornament_extraction",
-                                        text_model_name = "Residual_attention_UNet_text_extraction_finetuning_400_epochs",
+                                        text_model_name = "Residual_attention_UNet_text_extraction_finetuning",
                                         page_extraction_model_name = "Residual_attention_UNet_page_extraction",
                                         NLM_strong=False,
                                         GPU_timing=False
                                         ):
 
     img_names = os.listdir(folder_data_path)
-    models_folder_path = 'models_CHECKING_2019'
+    models_folder_path = 'models'
     device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
     print('Using device:', device)
     timing_data = []
@@ -734,10 +734,9 @@ def manuscript_cleaning_and_timing_NLM(folder_data_path,
 if __name__ == "__main__":
 
     folder_data_path = os.path.join("books","5d41_sannazaro_le_rime")
-    # folder_data_path = os.path.join("TO_REMOVE_folder")
     ornament_model_name = "Residual_attention_UNet_ornament_extraction"
     # ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
-    text_model_name = "Residual_attention_UNet_text_extraction_finetuning_400_epochs"
+    text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
     # text_model_name = "Residual_attention_UNet_text_extraction"
     # page_extraction_model_name = None
     page_extraction_model_name = "Residual_attention_UNet_page_extraction"

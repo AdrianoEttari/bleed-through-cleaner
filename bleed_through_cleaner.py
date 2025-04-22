@@ -251,7 +251,7 @@ class bleed_through_cleaner:
         '''
         patch_size = 400
         stride = 100
-        batch_size = 64
+        batch_size = 8
 
         if page_extraction_model_name:
             page_filtered_image, mask_page, page_GPU_time = self.page_extract(page_extraction_model_name)
@@ -733,13 +733,20 @@ def manuscript_cleaning_and_timing_NLM(folder_data_path,
 
 if __name__ == "__main__":
 
-    folder_data_path = os.path.join("books","5d41_sannazaro_le_rime")
+    ##### FOLDER WITH THE IMAGES TO CLEAN #####
+    # folder_data_path = os.path.join("books","5d41_sannazaro_le_rime")
+    folder_data_path = os.path.join("PROVA")
+
+    ##### TO USE IN GENERAL #####
     ornament_model_name = "Residual_attention_UNet_ornament_extraction"
-    # ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
     text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
-    # text_model_name = "Residual_attention_UNet_text_extraction"
-    # page_extraction_model_name = None
     page_extraction_model_name = "Residual_attention_UNet_page_extraction"
+
+    ##### TO USE WITH DIBCO #####
+
+    # page_extraction_model_name = None
+    # ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
+    # text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
 
     manuscript_cleaning_and_timing_NLM(folder_data_path, 
                                     save_mask=False,
@@ -747,7 +754,7 @@ if __name__ == "__main__":
                                         text_model_name = text_model_name,
                                         page_extraction_model_name = page_extraction_model_name,
                                         NLM_strong=False,
-                                        GPU_timing=True)
+                                        GPU_timing=False)
                                         
 
         

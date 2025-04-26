@@ -939,14 +939,14 @@ if __name__ == "__main__":
     folder_data_path = "TO_REMOVE"
 
     ##### TO USE IN GENERAL #####
-    # ornament_model_name = "Residual_attention_UNet_ornament_extraction"
-    # text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
-    # page_extraction_model_name = "Residual_attention_UNet_page_extraction"
+    ornament_model_name = "Residual_attention_UNet_ornament_extraction"
+    text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
+    page_extraction_model_name = "Residual_attention_UNet_page_extraction"
 
     ##### TO USE WITH DIBCO #####
-    page_extraction_model_name = None
-    ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
-    text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
+    # page_extraction_model_name = None
+    # ornament_model_name = "Residual_attention_UNet_ornament_extraction_finetuning"
+    # text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
 
     manuscript_cleaning_and_timing_NLM(folder_data_path, 
                                     save_mask=False,

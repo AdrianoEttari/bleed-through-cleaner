@@ -1,7 +1,7 @@
 # Bleed-through-cleaner
 
 
-[![Paper](https://img.shields.io/badge/Paper-blue)](https://www.mdpi.com/2313-433X/11/5/136)
+[![Paper](https://img.shields.io/badge/Paper-green)](https://www.mdpi.com/2313-433X/11/5/136) [![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5.svg?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/adriano-ettari-b8741b21b/)
 
 
 

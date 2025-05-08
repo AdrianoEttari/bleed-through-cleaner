@@ -250,7 +250,7 @@ class bleed_through_cleaner:
         The function returns the page_filtered_image and the final bleed-through mask.
         '''
         patch_size = 400
-        stride = 100
+        stride = 200
         batch_size = 8
 
         if page_extraction_model_name:
@@ -470,8 +470,6 @@ class bleed_through_cleaner:
         '''
 
         if save_folder_path_mask_page:
-            # page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_page_filtered.png')
-            # mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.dirname(self.image_path).split('_')[0]+'_'+os.path.basename(self.image_path).split('_')[1]+'_BLEED_THROUGH_MASK.png')
             page_filtered_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_page_filtered.png')
             mask_bleed_through_save_path = os.path.join(save_folder_path_mask_page, os.path.basename(self.image_path).split('.')[0]+'_BLEED_THROUGH_MASK.png')
             
@@ -731,10 +729,214 @@ def manuscript_cleaning_and_timing_NLM(folder_data_path,
             writer.writerows(timing_data)
         print(f"Processing times saved to {csv_file_path}")
 
+def manuscript_cleaning_and_timing_biweight(folder_data_path, 
+                                    save_mask=True,
+                                        ornament_model_name="Residual_attention_UNet_ornament_extraction",
+                                        text_model_name = "Residual_attention_UNet_text_extraction_finetuning",
+                                        page_extraction_model_name = "Residual_attention_UNet_page_extraction",
+                                        GPU_timing=False
+                                        ):
+
+    img_names = os.listdir(folder_data_path)
+    models_folder_path = 'models'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+    print('Using device:', device)
+    timing_data = []
+
+    unique_id = str(int(time.time()))
+    save_folder_path = os.path.join(folder_data_path + "_CLEANED_" + unique_id)
+    os.makedirs(save_folder_path, exist_ok=True)
+
+    # None if you don't want to save the mask and the page
+    if save_mask:
+        mask_page_folder_path = save_folder_path
+    else:
+        mask_page_folder_path = None
+    
+    for img_name in img_names:
+        image_path = os.path.join(folder_data_path, img_name)
+        cleaner = bleed_through_cleaner(image_path, models_folder_path, GPU_timing, device)
+        start = time.time()
+        cleaned_image, GPU_time = cleaner.biweight_image_inpainting(ornament_model_name=ornament_model_name,
+                                                            text_model_name=text_model_name,
+                                                            page_extraction_model_name=page_extraction_model_name,
+                                                            sigma_clip_sigma=2,sigma_clip_sigma_lower=None,
+                                                            sigma_clip_sigma_upper=None,sigma_clip_maxiters=10,
+                                                            save_folder_path_mask_page = mask_page_folder_path)
+
+                                
+        total_time = time.time()-start
+
+        extension = img_name.split('.')[-1]
+        new_name = img_name.replace('.'+extension,'')+'_biweight.png'
+        Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+        if GPU_timing:
+            timing_data.append([img_name, GPU_time, total_time])
+
+    if GPU_timing:   
+        csv_file_path = os.path.join(save_folder_path, 'processing_times.csv')
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Image Name", "GPU Usage Time (s)", "Total Time (s)"])
+            writer.writerows(timing_data)
+        print(f"Processing times saved to {csv_file_path}")
+
+def manuscript_cleaning_and_timing_GMM(folder_data_path, 
+                                    save_mask=True,
+                                        ornament_model_name="Residual_attention_UNet_ornament_extraction",
+                                        text_model_name = "Residual_attention_UNet_text_extraction_finetuning",
+                                        page_extraction_model_name = "Residual_attention_UNet_page_extraction",
+                                        GPU_timing=False
+                                        ):
+
+    img_names = os.listdir(folder_data_path)
+    models_folder_path = 'models'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+    print('Using device:', device)
+    timing_data = []
+
+    unique_id = str(int(time.time()))
+    save_folder_path = os.path.join(folder_data_path + "_CLEANED_" + unique_id)
+    os.makedirs(save_folder_path, exist_ok=True)
+
+    # None if you don't want to save the mask and the page
+    if save_mask:
+        mask_page_folder_path = save_folder_path
+    else:
+        mask_page_folder_path = None
+    
+    for img_name in img_names:
+        image_path = os.path.join(folder_data_path, img_name)
+        cleaner = bleed_through_cleaner(image_path, models_folder_path, GPU_timing, device)
+        start = time.time()
+        cleaned_image, GPU_time = cleaner.GMM_image_inpainting(ornament_model_name=ornament_model_name,
+                                                            text_model_name=text_model_name,
+                                                            page_extraction_model_name=page_extraction_model_name,
+                                                            save_folder_path_mask_page = mask_page_folder_path)
+
+                                
+        total_time = time.time()-start
+
+        extension = img_name.split('.')[-1]
+        new_name = img_name.replace('.'+extension,'')+'_GMM.png'
+        Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+        if GPU_timing:
+            timing_data.append([img_name, GPU_time, total_time])
+
+    if GPU_timing:   
+        csv_file_path = os.path.join(save_folder_path, 'processing_times.csv')
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Image Name", "GPU Usage Time (s)", "Total Time (s)"])
+            writer.writerows(timing_data)
+        print(f"Processing times saved to {csv_file_path}")
+
+def manuscript_cleaning_and_timing_GaussianDenoise(folder_data_path, 
+                                    save_mask=True,
+                                        ornament_model_name="Residual_attention_UNet_ornament_extraction",
+                                        text_model_name = "Residual_attention_UNet_text_extraction_finetuning",
+                                        page_extraction_model_name = "Residual_attention_UNet_page_extraction",
+                                        GPU_timing=False
+                                        ):
+
+    img_names = os.listdir(folder_data_path)
+    models_folder_path = 'models'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+    print('Using device:', device)
+    timing_data = []
+
+    unique_id = str(int(time.time()))
+    save_folder_path = os.path.join(folder_data_path + "_CLEANED_" + unique_id)
+    os.makedirs(save_folder_path, exist_ok=True)
+
+    # None if you don't want to save the mask and the page
+    if save_mask:
+        mask_page_folder_path = save_folder_path
+    else:
+        mask_page_folder_path = None
+    
+    for img_name in img_names:
+        image_path = os.path.join(folder_data_path, img_name)
+        cleaner = bleed_through_cleaner(image_path, models_folder_path, GPU_timing, device)
+        start = time.time()
+        cleaned_image, GPU_time = cleaner.Gaussian_denoise_image_inpainting(ornament_model_name=ornament_model_name,
+                                                            text_model_name=text_model_name,
+                                                            page_extraction_model_name=page_extraction_model_name,
+                                                            sigma=1,
+                                                            save_folder_path_mask_page = mask_page_folder_path)
+
+                                
+        total_time = time.time()-start
+
+        extension = img_name.split('.')[-1]
+        new_name = img_name.replace('.'+extension,'')+'_GaussianDenoise.png'
+        Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+        if GPU_timing:
+            timing_data.append([img_name, GPU_time, total_time])
+
+    if GPU_timing:   
+        csv_file_path = os.path.join(save_folder_path, 'processing_times.csv')
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Image Name", "GPU Usage Time (s)", "Total Time (s)"])
+            writer.writerows(timing_data)
+        print(f"Processing times saved to {csv_file_path}")
+
+def manuscript_cleaning_and_timing_median(folder_data_path, 
+                                    save_mask=True,
+                                        ornament_model_name="Residual_attention_UNet_ornament_extraction",
+                                        text_model_name = "Residual_attention_UNet_text_extraction_finetuning",
+                                        page_extraction_model_name = "Residual_attention_UNet_page_extraction",
+                                        GPU_timing=False
+                                        ):
+
+    img_names = os.listdir(folder_data_path)
+    models_folder_path = 'models'
+    device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
+    print('Using device:', device)
+    timing_data = []
+
+    unique_id = str(int(time.time()))
+    save_folder_path = os.path.join(folder_data_path + "_CLEANED_" + unique_id)
+    os.makedirs(save_folder_path, exist_ok=True)
+
+    # None if you don't want to save the mask and the page
+    if save_mask:
+        mask_page_folder_path = save_folder_path
+    else:
+        mask_page_folder_path = None
+    
+    for img_name in img_names:
+        image_path = os.path.join(folder_data_path, img_name)
+        cleaner = bleed_through_cleaner(image_path, models_folder_path, GPU_timing, device)
+        start = time.time()
+        cleaned_image, GPU_time = cleaner.median_image_inpainting(ornament_model_name=ornament_model_name,
+                                                            text_model_name=text_model_name,
+                                                            page_extraction_model_name=page_extraction_model_name,
+                                                            save_folder_path_mask_page = mask_page_folder_path)
+
+                                
+        total_time = time.time()-start
+
+        extension = img_name.split('.')[-1]
+        new_name = img_name.replace('.'+extension,'')+'_median.png'
+        Image.fromarray(cleaned_image).save(os.path.join(save_folder_path, new_name))
+        if GPU_timing:
+            timing_data.append([img_name, GPU_time, total_time])
+
+    if GPU_timing:   
+        csv_file_path = os.path.join(save_folder_path, 'processing_times.csv')
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Image Name", "GPU Usage Time (s)", "Total Time (s)"])
+            writer.writerows(timing_data)
+        print(f"Processing times saved to {csv_file_path}")
+
 if __name__ == "__main__":
 
     ##### FOLDER WITH THE IMAGES TO CLEAN #####
-    folder_data_path = os.path.join("books","5d41_sannazaro_le_rime")
+    # folder_data_path = os.path.join("books","5d41_sannazaro_le_rime")
+    folder_data_path = "TO_REMOVE"
 
     ##### TO USE IN GENERAL #####
     ornament_model_name = "Residual_attention_UNet_ornament_extraction"
@@ -753,6 +955,37 @@ if __name__ == "__main__":
                                         page_extraction_model_name = page_extraction_model_name,
                                         NLM_strong=False,
                                         GPU_timing=False)
+
+    # manuscript_cleaning_and_timing_biweight(folder_data_path, 
+    #                                     save_mask=False,
+    #                                     ornament_model_name=ornament_model_name,
+    #                                     text_model_name = text_model_name,
+    #                                     page_extraction_model_name = page_extraction_model_name,
+    #                                     GPU_timing=False)
+
+    # manuscript_cleaning_and_timing_GMM(folder_data_path, 
+    #                                 save_mask=False,
+    #                                 ornament_model_name=ornament_model_name,
+    #                                 text_model_name = text_model_name,
+    #                                 page_extraction_model_name = page_extraction_model_name,
+    #                                 GPU_timing=False)
+    
+    # manuscript_cleaning_and_timing_GaussianDenoise(folder_data_path, 
+    #                             save_mask=False,
+    #                             ornament_model_name=ornament_model_name,
+    #                             text_model_name = text_model_name,
+    #                             page_extraction_model_name = page_extraction_model_name,
+    #                             GPU_timing=False)
+    
+    # manuscript_cleaning_and_timing_median(folder_data_path, 
+    #                             save_mask=False,
+    #                             ornament_model_name=ornament_model_name,
+    #                             text_model_name = text_model_name,
+    #                             page_extraction_model_name = page_extraction_model_name,
+    #                             GPU_timing=False)
+
+
+
                                         
 
         

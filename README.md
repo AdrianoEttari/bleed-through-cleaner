@@ -1,6 +1,7 @@
 # Bleed-through-cleaner
 
-<!-- Paper:  -->
+https://img.shields.io/badge/Paper
+
 
 Ancient manuscripts suffer from aging problems, due to chemical agents, humidity and other factors, all of which tend to diminish the document readability. One of the most invalidating effect of aging is bleed-through, which is the phenomenon of ink from one side of the paper seeping through to the other side. 
 

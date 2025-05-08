@@ -1,7 +1,7 @@
 # Bleed-through-cleaner
 
 
-[![Paper](https://img.shields.io/badge/Paper-green)](https://www.mdpi.com/2313-433X/11/5/136)
+[![Paper](https://img.shields.io/badge/Paper-JournalOfImaging-blue)](https://www.mdpi.com/2313-433X/11/5/136)
 
 
 

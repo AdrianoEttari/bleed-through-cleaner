@@ -14,5 +14,8 @@ Click on it so that you can move the slider to better appreciate the results.
 
 [<img src="assets/imgsli_bleed_through_cleaner.png" height="500px"/>](https://imgsli.com/MzM4MjA4)
 
+## Documentation
+This work has been published in the open access journal [Journal of Imaging](https://www.mdpi.com/journal/jimaging ). You may access the paper from the following link [Paper](https://www.mdpi.com/2313-433X/11/5/136).
+
 ## Contact
 If you have any questions, feel free to contact me at `adriano.ettari@unina.it` or on my LinkedIn page [![LinkedIn](https://img.shields.io/badge/LinkedIn-%230077B5.svg?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/adriano-ettari-b8741b21b/)

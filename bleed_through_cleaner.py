@@ -17,6 +17,19 @@ import shutil
 import time
 import csv
 
+
+
+def darken_selected(img, factor=0.7):
+    """
+    img: H x W x 3 uint8
+    mask: H x W bool (True = darken)
+    factor: <1 to darken
+    """
+    img = img.astype(np.float32)
+    img *= factor
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
 class bleed_through_cleaner:
     def __init__(self, image_path, models_folder_path, GPU_timing, device) -> None:
         self.image_path = image_path
@@ -616,7 +629,14 @@ class bleed_through_cleaner:
             nlm_denoised_image = cv2.fastNlMeansDenoising(image_to_inpaint, None, h=filter_strength, templateWindowSize=templateWindowSize, searchWindowSize=searchWindowSize)
 
         pixels_not_to_inpaint = page_filtered_image[mask == 0]
-        nlm_denoised_image[mask == 0] = pixels_not_to_inpaint
+
+        # The darkening is used to make the text more clear, but it is not faint, then it is useless or even harmful
+        darkening = False
+        if darkening:
+            nlm_denoised_image[mask == 0] = darken_selected(pixels_not_to_inpaint, factor=0.7)            
+        else:
+            nlm_denoised_image[mask == 0] = pixels_not_to_inpaint
+
         NLM_time = time.time() - start
         print(f"It tooks {NLM_time:.2f} seconds to perform NLM!")
         return nlm_denoised_image, GPU_time
@@ -936,7 +956,9 @@ if __name__ == "__main__":
 
     ##### FOLDER WITH THE IMAGES TO CLEAN #####
     # folder_data_path = os.path.join("books","5d41_sannazaro_le_rime")
-    folder_data_path = "TO_REMOVE"
+    # folder_data_path = "TO_REMOVE"
+    folder_data_path = os.path.join("IMPROVE_TEXT_4TRANSCRIBUS","PROVA_DATA")
+    # folder_data_path = os.path.join("IMPROVE_TEXT_4TRANSCRIBUS","PROVA_DATA_CLEANED_Darken")
 
     ##### TO USE IN GENERAL #####
     ornament_model_name = "Residual_attention_UNet_ornament_extraction"

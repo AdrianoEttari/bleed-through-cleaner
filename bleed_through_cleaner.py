@@ -631,7 +631,7 @@ class bleed_through_cleaner:
         pixels_not_to_inpaint = page_filtered_image[mask == 0]
 
         # The darkening is used to make the text more clear, but it is not faint, then it is useless or even harmful
-        darkening = True
+        darkening = False
         if darkening:
             nlm_denoised_image[mask == 0] = darken_selected(pixels_not_to_inpaint, factor=0.7)            
         else:

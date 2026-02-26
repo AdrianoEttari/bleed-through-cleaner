@@ -631,7 +631,7 @@ class bleed_through_cleaner:
         pixels_not_to_inpaint = page_filtered_image[mask == 0]
 
         # The darkening is used to make the text more clear, but it is not faint, then it is useless or even harmful
-        darkening = False
+        darkening = True
         if darkening:
             nlm_denoised_image[mask == 0] = darken_selected(pixels_not_to_inpaint, factor=0.7)            
         else:
@@ -957,8 +957,7 @@ if __name__ == "__main__":
     ##### FOLDER WITH THE IMAGES TO CLEAN #####
     # folder_data_path = os.path.join("books","5d41_sannazaro_le_rime")
     # folder_data_path = "TO_REMOVE"
-    folder_data_path = os.path.join("IMPROVE_TEXT_4TRANSCRIBUS","PROVA_DATA")
-    # folder_data_path = os.path.join("IMPROVE_TEXT_4TRANSCRIBUS","PROVA_DATA_CLEANED_Darken")
+    folder_data_path = os.path.join("IMPROVE_TEXT_4TRANSCRIBUS","Copiadispacci_166_ORIGINAL_JPG")
 
     ##### TO USE IN GENERAL #####
     ornament_model_name = "Residual_attention_UNet_ornament_extraction"

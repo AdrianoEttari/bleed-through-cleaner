@@ -13,7 +13,9 @@ from tqdm import tqdm
 # Identify the full paths of the images that are not afftected by bleed-through,
 # so that we can build a dataset to create back the background.
 
-datasets = ["Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", "Firenze_BibliotecaMediceaLaurenziana_Plut_40_1"]
+# datasets = ["Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", "Firenze_BibliotecaMediceaLaurenziana_Plut_40_1"]
+datasets = ["Firenze_BibliotecaMediceaLaurenziana_Plut_40_1"]
+
 json_path = "images_with_and_without_bleed_through.json"
 
 if os.path.exists(json_path):
@@ -56,6 +58,8 @@ with open(json_path, "w") as f:
     json.dump(images_with_and_without_bleed_through, f, indent=4)
 
 
+
+
 #%% CHECK IMAGES
 json_path = "images_with_and_without_bleed_through.json"
 
@@ -69,4 +73,12 @@ for img_path in images_with_and_without_bleed_through["no"]:
     axs.set_title(img_path)
     axs.axis("off")
     plt.show()
+    good_or_not = input("Is this image really not affected by bleed-through? (y/n) ")
+    while good_or_not.lower() not in ["y","n"]:
+        good_or_not = input("(WRONG INPUT. TYPE AGAIN). Is this image really not affected by bleed-through? (y/n) ")
+    if good_or_not == "n":
+        images_with_and_without_bleed_through["no"].remove(img_path)
+        images_with_and_without_bleed_through["yes"].append(img_path)
 
+
+# %%

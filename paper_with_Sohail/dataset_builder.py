@@ -30,8 +30,12 @@ with open(json_path, "r") as f:
 dataset_folder_path = os.path.join("dataset")
 os.makedirs(dataset_folder_path, exist_ok=True)
 
+already_saved = os.listdir(dataset_folder_path)
+
 for img_path in images_with_and_without_bleed_through["no"]:
-    
+    if os.path.basename(img_path.replace(".jpg","_idx_0.png")) in already_saved:
+        print(img_path, " already saved.")
+        continue
     cleaner = bleed_through_cleaner(img_path, models_folder, False, device)
 
     image = Image.open(img_path)

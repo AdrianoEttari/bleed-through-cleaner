@@ -25,8 +25,7 @@ models_folder = os.path.join("..","models")
 with open(json_path, "r") as f:
     images_with_and_without_bleed_through = json.load(f)
 
-#%%
-
+#%% MASKED PATCHES SAVE
 dataset_folder_path = os.path.join("dataset")
 os.makedirs(dataset_folder_path, exist_ok=True)
 
@@ -59,5 +58,7 @@ for img_path in images_with_and_without_bleed_through["no"]:
         filename = os.path.basename(img_path).replace(".jpg", f"_idx_{idx}.png")
         Image.fromarray(patch).save(os.path.join(dataset_folder_path, filename))
     
+            
+            
+        
 
-# %%

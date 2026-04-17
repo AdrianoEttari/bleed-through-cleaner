@@ -76,6 +76,4 @@ class get_data(Dataset):
 
         return (
             torch.tensor(input_tensor).permute(2, 0, 1),
-            torch.tensor(rgb).permute(2, 0, 1),
-            torch.tensor(holes_mask)
-        )
+            torch.tensor(rgb).permute(2, 0, 1))

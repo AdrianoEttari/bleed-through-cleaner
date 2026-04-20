@@ -141,11 +141,9 @@ train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size,
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-num_epochs=100
+num_epochs=500
 
 trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, train_loader, optimizer, device)
 trainer.train(num_epochs, snapshot_path, scheduler=None)
-
-
 
 # %%

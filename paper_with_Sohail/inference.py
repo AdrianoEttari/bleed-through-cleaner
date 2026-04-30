@@ -80,7 +80,7 @@ json_path = "images_with_and_without_bleed_through.json"
 with open(json_path, "r") as f:
     images_with_and_without_bleed_through = json.load(f)
     
-img_path = images_with_and_without_bleed_through["no"][0]
+img_path = images_with_and_without_bleed_through["yes"][10]
 
 models_folder = os.path.join("..","models")
 
@@ -94,16 +94,18 @@ def process_img(img_path, models_folder, device):
     rgb_image, mask, holes_mask = make_holes_with_mouse(img_mask_concat)
     return rgb_image, mask, holes_mask
 
-######## LITTLE TEST
-from PIL import Image
 patch_size = 512
-img = np.array(Image.open(img_path))
-img = img[:patch_size,250:250+patch_size, :]
-Image.fromarray(img).save("test_patch.png")
-rgb_image, text_mask, holes_mask = process_img("test_patch.png", models_folder, device)
+
+
+######## LITTLE TEST
+# from PIL import Image
+# img = np.array(Image.open(img_path))
+# img = img[:patch_size,250:250+patch_size, :]
+# Image.fromarray(img).save("test_patch.png")
+# rgb_image, text_mask, holes_mask = process_img("test_patch.png", models_folder, device)
 ##########
 
-# rgb_image, text_mask, holes_mask = process_img(img_path, models_folder, device)
+rgb_image, text_mask, holes_mask = process_img(img_path, models_folder, device)
 
 n = np.sum(holes_mask)
 rgb_image = normalize(rgb_image)

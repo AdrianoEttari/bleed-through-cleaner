@@ -30,6 +30,7 @@ dataset_folder_path = os.path.join("dataset")
 os.makedirs(dataset_folder_path, exist_ok=True)
 
 already_saved = os.listdir(dataset_folder_path)
+transform = transforms.Compose([transforms.ToTensor()])
 
 for img_path in images_with_and_without_bleed_through["no"]:
     if os.path.basename(img_path.replace(".jpg","_idx_0.png")) in already_saved:
@@ -39,13 +40,12 @@ for img_path in images_with_and_without_bleed_through["no"]:
 
     image = Image.open(img_path)
     page_filtered_image = np.array(image)
-    transform = transforms.Compose([transforms.ToTensor()])
     page_filtered_image_tensor = transform(page_filtered_image).to(device)
 
-    aggregation_sampling = split_aggregation_sampling(img_lr=page_filtered_image_tensor, patch_size=patch_size, stride=stride,
-                                                        batch_size=batch_size, magnification_factor=1, device=device, multiple_gpus=False)
-
+    # aggregation_sampling = split_aggregation_sampling(img_lr=page_filtered_image_tensor, patch_size=patch_size, stride=stride,
+    #                                                     batch_size=batch_size, magnification_factor=1, device=device, multiple_gpus=False)
     # text_mask, text_GPU_time = cleaner.text_detect(aggregation_sampling, model_name='Residual_attention_UNet_text_extraction')
+    
     page_filtered_image, mask, _ = cleaner.bleed_through_finder(page_extraction_model_name='Residual_attention_UNet_page_extraction',
                                 ornament_model_name='Residual_attention_UNet_ornament_extraction',
                                 text_model_name='Residual_attention_UNet_text_extraction')

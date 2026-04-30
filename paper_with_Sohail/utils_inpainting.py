@@ -4,18 +4,30 @@ from torch.utils.data import Dataset
 import numpy as np
 from PIL import Image
 import os
+from matplotlib.widgets import RectangleSelector
+import matplotlib.pyplot as plt
+
 
 def make_holes(image, min_hole_size=25, max_hole_size=100, max_holes=10):
+    """
+    * Take a numpy image and split its rgb part and the mask part (also binarize the mask);
+    * Randomly select a number of holes to apply to the image;
+    * Build the holes_mask to be output at the end as a zero valued array of the spatial shape of the rgb_image.
+    * For each hole:
+        * Randomly choose its dimensions and consequentially the position of the hole in the image;
+        * If the image, in the selected hole area is on average is 0.8, then select that region to be 1 valued.
+    
+    """
+    
     rgb_image = image[:,:,:3]
     mask = image[:,:,3]
-    
+    mask = (mask > 127).astype(np.uint8) # mask is either 0 or 255, so let's make it False or True
+
     num_holes = np.random.randint(1, max_holes + 1)
     
     h, w, c = rgb_image.shape
     holes_mask = np.zeros((h, w), dtype=np.uint8)
 
-
-    mask = (mask > 127).astype(np.uint8) # mask is either 0 or 255, so let's make it False or True
     for _ in range(num_holes):
         hole_size = np.random.randint(min_hole_size, max_hole_size + 1)
         y = np.random.randint(0, h - hole_size)
@@ -25,6 +37,56 @@ def make_holes(image, min_hole_size=25, max_hole_size=100, max_holes=10):
         if region.mean() > 0.8:
             holes_mask[y:y+hole_size, x:x+hole_size]=1
     
+    return rgb_image, mask, holes_mask
+
+
+def make_holes_with_mouse(image):
+    rgb_image = image[:, :, :3]
+    mask = image[:, :, 3]
+    mask = (mask > 127).astype(np.uint8)
+
+    h, w, _ = rgb_image.shape
+    holes_mask = np.zeros((h, w), dtype=np.uint8)
+
+    fig, ax = plt.subplots()
+    ax.imshow(rgb_image)
+    ax.set_title("Draw holes with mouse (press ENTER to finish)")
+    ax.axis("off")
+
+    rectangles = []
+
+    def onselect(eclick, erelease):
+        x1, y1 = int(eclick.xdata), int(eclick.ydata)
+        x2, y2 = int(erelease.xdata), int(erelease.ydata)
+        rectangles.append((min(x1,x2), min(y1,y2),
+                           max(x1,x2), max(y1,y2)))
+
+        rect = plt.Rectangle((min(x1,x2), min(y1,y2)),
+                              abs(x2-x1), abs(y2-y1),
+                              edgecolor='red', facecolor='none', linewidth=2)
+        ax.add_patch(rect)
+        fig.canvas.draw()
+
+    toggle_selector = RectangleSelector(
+        ax, onselect,
+        useblit=True,
+        button=[1],
+        minspanx=5,
+        minspany=5,
+        spancoords='pixels',
+        interactive=True
+    )
+
+    plt.connect('key_press_event',
+                lambda event: plt.close() if event.key == 'enter' else None)
+    plt.show()
+
+    # Apply mask constraint (same logic as your original function)
+    for x1, y1, x2, y2 in rectangles:
+        region = mask[y1:y2, x1:x2]
+        if region.mean() > 0.8:
+            holes_mask[y1:y2, x1:x2] = 1
+
     return rgb_image, mask, holes_mask
 
 

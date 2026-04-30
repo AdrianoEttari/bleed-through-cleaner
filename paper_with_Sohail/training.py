@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data.distributed import DistributedSampler
-from utils import get_data
+from utils_inpainting import get_data
 
 class masked_l1(torch.nn.Module):
     def __init__(self):
@@ -126,7 +126,7 @@ class Trainer:
                     self.save_snapshot(epoch, snapshot_path)
 
 #%%
-from UNet_model import ResidualUNet
+from UNet_model_inpainting import ResidualUNet
 
 multiple_gpus=False
 save_every=1

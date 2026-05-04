@@ -40,7 +40,7 @@ def make_holes(image, min_hole_size=25, max_hole_size=100, max_holes=10):
     return rgb_image, mask, holes_mask
 
 
-def make_holes_with_mouse(image):
+def make_holes_with_mouse(image, max_size=100):
     rgb_image = image[:, :, :3]
     mask = image[:, :, 3]
     mask = (mask > 127).astype(np.uint8)
@@ -50,7 +50,9 @@ def make_holes_with_mouse(image):
 
     fig, ax = plt.subplots()
     ax.imshow(rgb_image)
-    ax.set_title("Draw holes with mouse (press ENTER to finish)")
+    ax.set_title(
+        f"Draw holes with mouse (max {max_size}px per side, press ENTER to finish)"
+    )
     ax.axis("off")
 
     rectangles = []
@@ -58,30 +60,58 @@ def make_holes_with_mouse(image):
     def onselect(eclick, erelease):
         x1, y1 = int(eclick.xdata), int(eclick.ydata)
         x2, y2 = int(erelease.xdata), int(erelease.ydata)
-        rectangles.append((min(x1,x2), min(y1,y2),
-                           max(x1,x2), max(y1,y2)))
 
-        rect = plt.Rectangle((min(x1,x2), min(y1,y2)),
-                              abs(x2-x1), abs(y2-y1),
-                              edgecolor='red', facecolor='none', linewidth=2)
+        x_min, x_max = min(x1, x2), max(x1, x2)
+        y_min, y_max = min(y1, y2), max(y1, y2)
+
+        width = x_max - x_min
+        height = y_max - y_min
+
+        # Size constraint check
+        if width > max_size or height > max_size:
+            print(
+                f"Rectangle too large "
+                f"(width={width}, height={height}). "
+                f"Please draw again (max {max_size}px)."
+            )
+            ax.set_title(
+                f"Rectangle too large! Max {max_size}px per side. Draw again."
+            )
+            fig.canvas.draw_idle()
+            return  # reject this rectangle
+
+        # Accept rectangle
+        rectangles.append((x_min, y_min, x_max, y_max))
+
+        rect = plt.Rectangle(
+            (x_min, y_min),
+            width, height,
+            edgecolor="red",
+            facecolor="none",
+            linewidth=2
+        )
         ax.add_patch(rect)
-        fig.canvas.draw()
+        ax.set_title("Rectangle accepted. Draw more or press ENTER to finish.")
+        fig.canvas.draw_idle()
 
     toggle_selector = RectangleSelector(
-        ax, onselect,
+        ax,
+        onselect,
         useblit=True,
         button=[1],
         minspanx=5,
         minspany=5,
-        spancoords='pixels',
+        spancoords="pixels",
         interactive=True
     )
 
-    plt.connect('key_press_event',
-                lambda event: plt.close() if event.key == 'enter' else None)
+    plt.connect(
+        "key_press_event",
+        lambda event: plt.close() if event.key == "enter" else None
+    )
     plt.show()
 
-    # Apply mask constraint (same logic as your original function)
+    # Apply mask constraint
     for x1, y1, x2, y2 in rectangles:
         region = mask[y1:y2, x1:x2]
         if region.mean() > 0.8:

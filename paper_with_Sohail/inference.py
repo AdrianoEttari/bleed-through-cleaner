@@ -110,6 +110,7 @@ rgb_image, text_mask, holes_mask = process_img(img_path, models_folder, device)
 n = np.sum(holes_mask)
 rgb_image = normalize(rgb_image)
 rgb_corrupt = rgb_image.copy()
+
 rgb_corrupt[holes_mask == 1] = np.random.uniform(low=0.0, high=1.0, size=(n, 3))
 input_tensor = np.concatenate(
             [
@@ -128,24 +129,24 @@ if source.shape[2] != patch_size or source.shape[3] != patch_size:
     pad_w = (patch_size - source.shape[3] % patch_size) % patch_size
     source = F.pad(source, (0, pad_w, 0, pad_h))
     target = F.pad(target, (0, pad_w, 0, pad_h))
+    
 
 #%%
 def pred_inpainted_page(pred, holes_mask_n, rgb_clean, text_mask_n):
-    pred = pred.clone()
     holes_mask_n = holes_mask_n.repeat(1,3,1,1)
     text_mask_n = text_mask_n.repeat(1,3,1,1)
     pred[holes_mask_n == 0] = rgb_clean[holes_mask_n == 0]
     pred[text_mask_n == 0] = rgb_clean[text_mask_n == 0]
     return pred
 
-def run_patchwise_inference(source, model, device, patch_size=512):
+def run_patchwise_inference(source, model, rgb_image, device, patch_size=512):
 
     source = source.to(device)  # [1, 5, H, W]
     B, C, H, W = source.shape
     if H == patch_size and W == patch_size:
         with torch.no_grad():
             pred = model(source[:, :3, :, :])
-        pred = pred_inpainted_page(pred, source[:, 4:5, :, :], source[:, :3, :, :], source[:, 3:4, :, :])
+        pred = pred_inpainted_page(pred, source[:, 4:5, :, :], rgb_image, source[:, 3:4, :, :])
         return pred
     # --------------------------------------------------
     # 1. Pad so H, W are divisible by patch_size
@@ -159,19 +160,21 @@ def run_patchwise_inference(source, model, device, patch_size=512):
     # --------------------------------------------------
     # 2. Split channels
     # --------------------------------------------------
-    rgb_clean  = source[:, :3]   # [1, 3, H, W]
+    rgb_input  = source[:, :3]   # [1, 3, H, W]
     text_mask  = source[:, 3:4]  # [1, 1, H, W]
     holes_mask = source[:, 4:5]  # [1, 1, H, W]
 
     # --------------------------------------------------
     # 3. Patchify using unfold
     # --------------------------------------------------
-    rgb_patches = rgb_clean.unfold(2, patch_size, patch_size)\
+    rgb_patches = rgb_input.unfold(2, patch_size, patch_size)\
                            .unfold(3, patch_size, patch_size)
     text_patches = text_mask.unfold(2, patch_size, patch_size)\
                              .unfold(3, patch_size, patch_size)
     holes_patches = holes_mask.unfold(2, patch_size, patch_size)\
                                .unfold(3, patch_size, patch_size)
+    rgb_image_patches = rgb_image.unfold(2, patch_size, patch_size)\
+                                 .unfold(3, patch_size, patch_size)
 
     # Shape: [B, C, nH, nW, 512, 512]
     B, C, nH, nW, _, _ = rgb_patches.shape
@@ -185,6 +188,9 @@ def run_patchwise_inference(source, model, device, patch_size=512):
 
     holes_patches = holes_patches.permute(0, 2, 3, 1, 4, 5)\
                                  .reshape(-1, 1, patch_size, patch_size)
+                                 
+    rgb_image_patches = rgb_image_patches.permute(0, 2, 3, 1, 4, 5)\
+                                 .reshape(-1, 3, patch_size, patch_size)
 
     # --------------------------------------------------
     # 4. Model inference on RGB only
@@ -198,7 +204,7 @@ def run_patchwise_inference(source, model, device, patch_size=512):
     pred_patches = pred_inpainted_page(
         pred_patches,
         holes_patches,
-        rgb_patches,
+        rgb_image_patches,
         text_patches
     )
 
@@ -222,7 +228,7 @@ def run_patchwise_inference(source, model, device, patch_size=512):
 
     return pred_full
 
-pred_source = run_patchwise_inference(source, model, device, patch_size=512)
+pred_source = run_patchwise_inference(source, model, target, device, patch_size=512)
 
 rgb_corrupt = source[:, :3, :, :]
 text_mask = source[:, 3, :, :]
@@ -238,7 +244,7 @@ axs[0].imshow(rgb_corrupt[0].permute(1,2,0).detach().cpu())
 axs[0].set_title("rgb corrupt")
 axs[1].imshow(full_mask.permute(1,2,0).detach().cpu(), cmap="gray")
 axs[1].set_title("full mask")
-axs[2].imshow(rgb_image)
+axs[2].imshow(target[0].permute(1,2,0).detach().cpu())
 axs[2].set_title("rgb clean")
 axs[3].imshow(pred_source[0].permute(1,2,0).detach().cpu())
 axs[3].set_title("predicted inpainted")

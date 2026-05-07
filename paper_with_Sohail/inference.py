@@ -10,6 +10,7 @@ device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("USING", device, " device")
 snapshot_path="./snapshots/snapshot.pt"
 dataset_path = os.path.join("dataset")
+# dataset_path = r"D:/MAGIC/dataset_MAGIC/dataset_MAGIC"
 train_dataset = get_data(".", dataset_path)
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -25,110 +26,110 @@ print(f"Snapshot loaded from {snapshot_path}")
 model.eval()
 
 #%% PROVA 1
-# for source, targets in train_loader:
-#     source = source.to(device)
-#     rgb_corrupt = source[:, :3, :, :]
-#     text_mask = source[:, 3, :, :]
-#     holes_mask = source[:, 4, :, :]
-#     with torch.no_grad():
-#         outputs = model(rgb_corrupt)
-#     break
+for source, targets in train_loader:
+    source = source.to(device)
+    rgb_corrupt = source[:, :3, :, :]
+    text_mask = source[:, 3, :, :]
+    holes_mask = source[:, 4, :, :]
+    with torch.no_grad():
+        outputs = model(rgb_corrupt)
+    break
 
-# import matplotlib.pyplot as plt
-# import numpy as np
-
-# def pred_inpainted_page(pred, holes_mask_n, rgb_clean, text_mask_n):
-#     pred[holes_mask_n==0] = rgb_clean[holes_mask_n==0]
-#     pred[text_mask_n==0] = rgb_clean[text_mask_n==0]
-#     return pred 
-
-# for i in range(source.shape[0]):
-#     img_n=i
-#     pred = outputs[img_n].permute(1,2,0).detach().cpu()
-#     orig = rgb_corrupt[img_n].permute(1,2,0).detach().cpu()
-#     holes_mask_n = holes_mask[img_n].detach().cpu()
-#     rgb_n = targets[img_n].permute(1,2,0).detach().cpu()
-#     text_mask_n = text_mask[img_n].detach().cpu()
-    
-#     full_pred = pred_inpainted_page(pred, holes_mask_n, rgb_n, text_mask_n)
-
-
-#     fig, axs = plt.subplots(1,3,figsize=(15,10)) 
-#     axs = axs.ravel()
-#     axs[0].imshow(orig)
-#     axs[0].set_title("Input")
-#     axs[1].imshow(rgb_n)
-#     axs[1].set_title("GT")
-#     axs[2].imshow(full_pred)
-#     axs[2].set_title("Pred")
-#     plt.show()
-# %% PROVA 2
-import json
-# from torchvision import transforms
-import numpy as np
-from utils_inpainting import make_holes, normalize, make_holes_with_mouse
-# from patchify import patchify
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from bleed_through_cleaner import bleed_through_cleaner
-import torch
-import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import numpy as np
 
-json_path = "images_with_and_without_bleed_through.json"
+def pred_inpainted_page(pred, holes_mask_n, rgb_clean, text_mask_n):
+    pred[holes_mask_n==0] = rgb_clean[holes_mask_n==0]
+    pred[text_mask_n==0] = rgb_clean[text_mask_n==0]
+    return pred 
 
-with open(json_path, "r") as f:
-    images_with_and_without_bleed_through = json.load(f)
+for i in range(source.shape[0]):
+    img_n=i
+    pred = outputs[img_n].permute(1,2,0).detach().cpu()
+    orig = rgb_corrupt[img_n].permute(1,2,0).detach().cpu()
+    holes_mask_n = holes_mask[img_n].detach().cpu()
+    rgb_n = targets[img_n].permute(1,2,0).detach().cpu()
+    text_mask_n = text_mask[img_n].detach().cpu()
     
-img_path = images_with_and_without_bleed_through["yes"][10]
-
-models_folder = os.path.join("..","models")
-
-def process_img(img_path, models_folder, device):
-    cleaner = bleed_through_cleaner(img_path, models_folder, False, device)
-    page_filtered_image, mask, _ = cleaner.bleed_through_finder(page_extraction_model_name='Residual_attention_UNet_page_extraction',
-                                ornament_model_name='Residual_attention_UNet_ornament_extraction',
-                                text_model_name='Residual_attention_UNet_text_extraction')
-    img_mask_concat = np.concatenate([page_filtered_image, mask[:,:,None]], axis=2) 
-    # rgb_image, mask, holes_mask = make_holes(img_mask_concat)
-    rgb_image, mask, holes_mask = make_holes_with_mouse(img_mask_concat)
-    return rgb_image, mask, holes_mask
-
-patch_size = 512
+    full_pred = pred_inpainted_page(pred, holes_mask_n, rgb_n, text_mask_n)
 
 
-######## LITTLE TEST
-# from PIL import Image
-# img = np.array(Image.open(img_path))
-# img = img[:patch_size,250:250+patch_size, :]
-# Image.fromarray(img).save("test_patch.png")
-# rgb_image, text_mask, holes_mask = process_img("test_patch.png", models_folder, device)
-##########
+    fig, axs = plt.subplots(1,3,figsize=(15,10)) 
+    axs = axs.ravel()
+    axs[0].imshow(orig)
+    axs[0].set_title("Input")
+    axs[1].imshow(rgb_n)
+    axs[1].set_title("GT")
+    axs[2].imshow(full_pred)
+    axs[2].set_title("Pred")
+    plt.show()
+# %% PROVA 2
+# import json
+# # from torchvision import transforms
+# import numpy as np
+# from utils_inpainting import make_holes, normalize, make_holes_with_mouse
+# # from patchify import patchify
+# import sys
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# from bleed_through_cleaner import bleed_through_cleaner
+# import torch
+# import torch.nn.functional as F
+# import matplotlib.pyplot as plt
 
-rgb_image, text_mask, holes_mask = process_img(img_path, models_folder, device)
+# json_path = "images_with_and_without_bleed_through.json"
 
-n = np.sum(holes_mask)
-rgb_image = normalize(rgb_image)
-rgb_corrupt = rgb_image.copy()
+# with open(json_path, "r") as f:
+#     images_with_and_without_bleed_through = json.load(f)
+    
+# img_path = images_with_and_without_bleed_through["yes"][10]
 
-rgb_corrupt[holes_mask == 1] = np.random.uniform(low=0.0, high=1.0, size=(n, 3))
-input_tensor = np.concatenate(
-            [
-                rgb_corrupt,
-                text_mask[..., None].astype(np.float32),
-                holes_mask[..., None].astype(np.float32)
-            ],
-            axis=2
-        )
-source = torch.tensor(input_tensor).permute(2, 0, 1).unsqueeze(0).to(device)
-target = torch.tensor(rgb_image).permute(2, 0, 1).unsqueeze(0).to(device)
+# models_folder = os.path.join("..","models")
 
-if source.shape[2] != patch_size or source.shape[3] != patch_size:
-    # pad
-    pad_h = (patch_size - source.shape[2] % patch_size) % patch_size
-    pad_w = (patch_size - source.shape[3] % patch_size) % patch_size
-    source = F.pad(source, (0, pad_w, 0, pad_h))
-    target = F.pad(target, (0, pad_w, 0, pad_h))
+# def process_img(img_path, models_folder, device):
+#     cleaner = bleed_through_cleaner(img_path, models_folder, False, device)
+#     page_filtered_image, mask, _ = cleaner.bleed_through_finder(page_extraction_model_name='Residual_attention_UNet_page_extraction',
+#                                 ornament_model_name='Residual_attention_UNet_ornament_extraction',
+#                                 text_model_name='Residual_attention_UNet_text_extraction')
+#     img_mask_concat = np.concatenate([page_filtered_image, mask[:,:,None]], axis=2) 
+#     # rgb_image, mask, holes_mask = make_holes(img_mask_concat)
+#     rgb_image, mask, holes_mask = make_holes_with_mouse(img_mask_concat)
+#     return rgb_image, mask, holes_mask
+
+# patch_size = 512
+
+
+# ######## LITTLE TEST
+# # from PIL import Image
+# # img = np.array(Image.open(img_path))
+# # img = img[:patch_size,250:250+patch_size, :]
+# # Image.fromarray(img).save("test_patch.png")
+# # rgb_image, text_mask, holes_mask = process_img("test_patch.png", models_folder, device)
+# ##########
+
+# rgb_image, text_mask, holes_mask = process_img(img_path, models_folder, device)
+
+# n = np.sum(holes_mask)
+# rgb_image = normalize(rgb_image)
+# rgb_corrupt = rgb_image.copy()
+
+# rgb_corrupt[holes_mask == 1] = np.random.uniform(low=0.0, high=1.0, size=(n, 3))
+# input_tensor = np.concatenate(
+#             [
+#                 rgb_corrupt,
+#                 text_mask[..., None].astype(np.float32),
+#                 holes_mask[..., None].astype(np.float32)
+#             ],
+#             axis=2
+#         )
+# source = torch.tensor(input_tensor).permute(2, 0, 1).unsqueeze(0).to(device)
+# target = torch.tensor(rgb_image).permute(2, 0, 1).unsqueeze(0).to(device)
+
+# if source.shape[2] != patch_size or source.shape[3] != patch_size:
+#     # pad
+#     pad_h = (patch_size - source.shape[2] % patch_size) % patch_size
+#     pad_w = (patch_size - source.shape[3] % patch_size) % patch_size
+#     source = F.pad(source, (0, pad_w, 0, pad_h))
+#     target = F.pad(target, (0, pad_w, 0, pad_h))
     
 
 #%%

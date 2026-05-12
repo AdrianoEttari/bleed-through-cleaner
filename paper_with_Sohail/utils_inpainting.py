@@ -8,7 +8,7 @@ from matplotlib.widgets import RectangleSelector
 import matplotlib.pyplot as plt
 
 
-def make_holes(image, min_hole_size=25, max_hole_size=100, max_holes=10):
+def make_holes(image, min_hole_size=50, max_hole_size=200, max_holes=10):
     """
     * Take a numpy image and split its rgb part and the mask part (also binarize the mask);
     * Randomly select a number of holes to apply to the image;
@@ -40,7 +40,7 @@ def make_holes(image, min_hole_size=25, max_hole_size=100, max_holes=10):
     return rgb_image, mask, holes_mask
 
 
-def make_holes_with_mouse(image, max_size=100):
+def make_holes_with_mouse(image, max_hole_size=100):
     rgb_image = image[:, :, :3]
     mask = image[:, :, 3]
     mask = (mask > 127).astype(np.uint8)
@@ -51,7 +51,7 @@ def make_holes_with_mouse(image, max_size=100):
     fig, ax = plt.subplots()
     ax.imshow(rgb_image)
     ax.set_title(
-        f"Draw holes with mouse (max {max_size}px per side, press ENTER to finish)"
+        f"Draw holes with mouse (max {max_hole_size}px per side, press ENTER to finish)"
     )
     ax.axis("off")
 
@@ -68,14 +68,14 @@ def make_holes_with_mouse(image, max_size=100):
         height = y_max - y_min
 
         # Size constraint check
-        if width > max_size or height > max_size:
+        if width > max_hole_size or height > max_hole_size:
             print(
                 f"Rectangle too large "
                 f"(width={width}, height={height}). "
-                f"Please draw again (max {max_size}px)."
+                f"Please draw again (max {max_hole_size}px)."
             )
             ax.set_title(
-                f"Rectangle too large! Max {max_size}px per side. Draw again."
+                f"Rectangle too large! Max {max_hole_size}px per side. Draw again."
             )
             fig.canvas.draw_idle()
             return  # reject this rectangle
@@ -130,8 +130,9 @@ def normalize(rgb):
 class get_data(Dataset):
     '''
     '''
-    def __init__(self, root_dir, imgs_folder_name, transform=None):
+    def __init__(self, root_dir, imgs_folder_name, max_hole_size, transform=None):
         self.root_dir = root_dir
+        self.max_hole_size = max_hole_size
         self.transform = transform
         self.imgs_folder_name = imgs_folder_name
         self.imgs_filenames = os.listdir(os.path.join(self.root_dir, self.imgs_folder_name))
@@ -142,7 +143,7 @@ class get_data(Dataset):
     def __getitem__(self, idx):
         img_full_path = os.path.join(self.root_dir, self.imgs_folder_name, self.imgs_filenames[idx])
         image = np.array(Image.open(img_full_path))          # H x W x 4
-        rgb, text_mask, holes_mask = make_holes(image)
+        rgb, text_mask, holes_mask = make_holes(image, max_hole_size=self.max_hole_size)
 
 
         # Normalize FIRST

@@ -26,6 +26,7 @@ class Trainer:
             save_every: int,
             model: torch.nn.Module,
             snapshot_path,
+            snapshot_filename,
             train_data,
             optimizer,
             device,
@@ -47,14 +48,15 @@ class Trainer:
         self.save_every = save_every
         self.epochs_run = 0
         self.snapshot_path = snapshot_path
-
+        self.snapshot_filename = snapshot_filename
+        
         if not os.path.exists(self.snapshot_path):
             os.makedirs(self.snapshot_path, exist_ok=True)
             print(f"Checkpoint folder '{self.snapshot_path}' created successfully.")
 
-        if os.path.exists(os.path.join(self.snapshot_path, "snapshot.pt")):
+        if os.path.exists(os.path.join(self.snapshot_path, self.snapshot_filename)):
             print(f"Loading snapshot from {self.snapshot_path}")
-            self.load_snapshot(os.path.join(self.snapshot_path, "snapshot.pt"))   
+            self.load_snapshot(os.path.join(self.snapshot_path, self.snapshot_filename))   
 
     def run_epoch(self, epoch: int):
         b_sz = len(next(iter(self.train_data))[0])
@@ -90,7 +92,7 @@ class Trainer:
         else:
             snapshot["MODEL_STATE"] = self.model.state_dict()
         snapshot["EPOCHS_RUN"] = epoch
-        PATH = os.path.join(snapshot_path, "snapshot.pt")
+        PATH = os.path.join(snapshot_path, self.snapshot_filename)
         torch.save(snapshot, PATH)
         print(f"Epoch {epoch} | Training snapshot saved at {PATH}")
 
@@ -106,8 +108,8 @@ class Trainer:
         print(f"Snapshot loaded from {snapshot_path}")
 
     def train(self, max_epochs: int, snapshot_path: str, scheduler):
-        if os.path.exists(os.path.join(snapshot_path, "snapshot.pt")):
-            snapshot = torch.load(os.path.join(snapshot_path, 'snapshot.pt'),map_location=torch.device('cpu'), weights_only=True)
+        if os.path.exists(os.path.join(snapshot_path, self.snapshot_filename)):
+            snapshot = torch.load(os.path.join(snapshot_path, self.snapshot_filename),map_location=torch.device('cpu'), weights_only=True)
             print(f"Restart training from epoch {snapshot['EPOCHS_RUN']}")
             
         for epoch in tqdm(range(self.epochs_run + 1, max_epochs +1), desc="Training the network"):
@@ -128,14 +130,22 @@ class Trainer:
 #%%
 from UNet_model_inpainting import ResidualUNet
 
+patch_size = 1024
+
 multiple_gpus=False
 save_every=1
 batch_size=16
 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("USING", device, " device")
 snapshot_path="./snapshots"
-dataset_path = os.path.join("dataset")
-train_dataset = get_data(".", dataset_path)
+os.makedirs(snapshot_path, exist_ok=True)
+
+snapshot_filename = "snapshot_PathSize_"+str(patch_size)+".pt"
+
+dataset_path = os.path.join("dataset_MAGIC_PatchSize"+str(patch_size))
+# dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
+
+train_dataset = get_data(".", dataset_path, max_hole_size=300)
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device).to(device)
@@ -143,7 +153,7 @@ model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), d
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 num_epochs=500
 
-trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, train_loader, optimizer, device)
+trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, snapshot_filename, train_loader, optimizer, device)
 trainer.train(num_epochs, snapshot_path, scheduler=None)
 
 # %%

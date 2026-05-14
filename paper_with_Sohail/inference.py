@@ -9,7 +9,7 @@ batch_size=16
 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("USING", device, " device")
 snapshot_path="./snapshots/snapshot.pt"
-dataset_path = os.path.join("dataset")
+dataset_path = os.path.join("dataset_MAGIC_PatchSize1024_partial")
 # dataset_path = r"D:/MAGIC/dataset_MAGIC/dataset_MAGIC"
 train_dataset = get_data(".", dataset_path, max_hole_size=100)
 
@@ -135,24 +135,32 @@ if source.shape[2] != patch_size or source.shape[3] != patch_size:
 #%%
 
 def BigHole_2_SmallHoles(hole_mask, small_hole_size=100):
-    hole_mask = hole_mask[0, 0, :, :]  # [H, W]
+    hole_mask = hole_mask[0, 0]  # [H, W]
     H, W = hole_mask.shape
     
     small_holes_masks = []
 
-    for i in range(0, H - small_hole_size + 1, small_hole_size):
-        for j in range(0, W - small_hole_size + 1, small_hole_size):
-            
-            # Extract candidate region
-            patch = hole_mask[i:i+small_hole_size, j:j+small_hole_size]
-            import ipdb; ipdb.set_trace()
-            # ✅ Check if fully inside white region
-            if np.all(patch == 1):
+    # 1. Find bounding box of the hole
+    coords = np.argwhere(hole_mask == 1)
+    y_min, x_min = coords.min(axis=0)
+    y_max, x_max = coords.max(axis=0) + 1  # exclusive
+
+    # 2. Iterate over the rectangle only
+    for y in range(y_min, y_max, small_hole_size):
+        for x in range(x_min, x_max, small_hole_size):
+
+            # Ensure patch stays inside hole
+            if y + small_hole_size <= y_max and x + small_hole_size <= x_max:
                 
-                small_mask = np.zeros_like(hole_mask)
-                small_mask[i:i+small_hole_size, j:j+small_hole_size] = 1
+                patch = hole_mask[y:y+small_hole_size, x:x+small_hole_size]
                 
-                small_holes_masks.append(small_mask)
+                # Optional safety check
+                if np.all(patch == 1):
+                    
+                    small_mask = np.zeros_like(hole_mask)
+                    small_mask[y:y+small_hole_size, x:x+small_hole_size] = 1
+
+                    small_holes_masks.append(small_mask)
 
     return small_holes_masks
 
@@ -175,10 +183,13 @@ def run_patchwise_inference(source, model, rgb_image, device, patch_size=512):
     #     return pred    
 
     final_pred = rgb_image.clone()
-    import ipdb; ipdb.set_trace()
+
     for small_holes_mask in small_holes_masks:
         pred = rgb_image.clone()
-        pred[small_holes_mask==1] = np.random.uniform(low=0.0, high=1.0, size=(n, 3))
+        mask = small_holes_mask==1
+        mask = torch.tensor(mask, device=device).unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
+        
+        pred[mask.expand(-1, 3, -1, -1)] = torch.rand(mask.expand(-1, 3, -1, -1).sum(), device=pred.device)
 
         # --------------------------------------------------
         # 1. Pad so H, W are divisible by patch_size
@@ -195,7 +206,8 @@ def run_patchwise_inference(source, model, rgb_image, device, patch_size=512):
         # rgb_input  = source[:, :3]   # [1, 3, H, W]
         rgb_input = pred
         text_mask  = source[:, 3:4]  # [1, 1, H, W]
-        holes_mask = source[:, 4:5]  # [1, 1, H, W]
+        # holes_mask = source[:, 4:5]  # [1, 1, H, W]
+        holes_mask = mask
 
         # --------------------------------------------------
         # 3. Patchify using unfold
@@ -230,14 +242,18 @@ def run_patchwise_inference(source, model, rgb_image, device, patch_size=512):
         # --------------------------------------------------
         with torch.no_grad():
             pred_patches = model(rgb_patches)  # [N, 3, 512, 512]
-        final_pred[small_holes_mask == 1] = pred_patches
+        import ipdb; ipdb.set_trace()
+        
+        # PROBLEMA: pred_patches è fatto da patches mentre final_pred è fatto da tutta l'immagine, quindi non posso fare final_pred[small_holes_mask == 1] = pred_patches perché non so a quale patch corrisponde ogni small_holes_mask
+        # TROVARE SOLUZIONE ALTERNATIVA
+        # final_pred[small_holes_mask == 1] = pred_patches
         # --------------------------------------------------
         # 5. Apply inpainting logic per patch
         # --------------------------------------------------
     final_pred[final_pred==0] = rgb_image[final_pred==0]
     
     pred_patches = pred_inpainted_page(
-        final_pred,
+        # final_pred,
         holes_patches,
         rgb_image_patches,
         text_patches

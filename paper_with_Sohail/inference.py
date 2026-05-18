@@ -8,8 +8,13 @@ save_every=1
 batch_size=16
 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("USING", device, " device")
-# snapshot_path="./snapshots/snapshot.pt"
-snapshot_path = "./snapshots/snapshot_PathSize_1024.pt"
+
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+# snapshot_path=os.path.join(base_dir, "./snapshots/snapshot.pt")
+snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt")
+
 
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device).to(device)
 
@@ -76,14 +81,14 @@ import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 
-json_path = "images_with_and_without_bleed_through.json"
+json_path = os.path.join(base_dir, "images_with_and_without_bleed_through.json")
 
 with open(json_path, "r") as f:
     images_with_and_without_bleed_through = json.load(f)
     
-img_path = images_with_and_without_bleed_through["yes"][14]
+img_path = os.path.join(base_dir, images_with_and_without_bleed_through["yes"][15])
 
-models_folder = os.path.join("..","models")
+models_folder = os.path.join(base_dir, "..", "models")
 
 def process_img(img_path, models_folder, device):
     cleaner = bleed_through_cleaner(img_path, models_folder, False, device)
@@ -125,7 +130,6 @@ source = torch.tensor(input_tensor).permute(2, 0, 1).unsqueeze(0).to(device)
 target = torch.tensor(rgb_image).permute(2, 0, 1).unsqueeze(0).to(device)
 
 if source.shape[2] != patch_size or source.shape[3] != patch_size:
-    # pad
     pad_h = (patch_size - source.shape[2] % patch_size) % patch_size
     pad_w = (patch_size - source.shape[3] % patch_size) % patch_size
     source = F.pad(source, (0, pad_w, 0, pad_h))
@@ -145,6 +149,7 @@ def BigHole_2_SmallHoles(hole_mask, small_hole_size):
 
     # 1. Find bounding box of the hole
     coords = np.argwhere(hole_mask == 1)
+    
     y_min, x_min = coords.min(axis=0)
     y_max, x_max = coords.max(axis=0) + 1  # exclusive
 
@@ -183,6 +188,7 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
         # --------------------------------------------------
 
         mask_np = hole_mask==1
+        
         coords = np.argwhere(mask_np[0][0])
 
         y_min, x_min = coords.min(axis=0)
@@ -285,6 +291,7 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
         final_pred[:, :, y0:y1, x0:x1][expanded_mask] = pred_crop[expanded_mask]
                         
     else:
+        
         small_holes_masks = BigHole_2_SmallHoles(hole_mask, small_hole_size=hole_size)
 
         margin = 64  # context around the hole
@@ -294,7 +301,7 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
         for i, small_holes_mask in enumerate(small_holes_masks):
 
             # --------------------------------------------------
-            # 1. Build mask tensor
+            # 1. Build mask tensor (holes)
             # --------------------------------------------------
             mask_np = (small_holes_mask == 1)
 
@@ -415,16 +422,19 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
     x0 = max(0, x_min - margin)-margin
     y1 = min(H, y_max + margin)+margin
     x1 = min(W, x_max + margin)+margin
-    final_pred_crop = final_pred[:, :, y0:y1, x0:x1].clone()
-    
-    final_pred_crop_smooth = TF.gaussian_blur(
-        final_pred_crop,
-        kernel_size=21,   # keep small to avoid over-blurring
-        sigma=2
-    )
-    
-    final_pred[:, :, y0:y1, x0:x1] = final_pred_crop_smooth
-    final_pred[(text_ornament_mask==0).expand(-1, 3, -1, -1)] = rgb_image[(text_ornament_mask==0).expand(-1, 3, -1, -1)]
+    try:
+        final_pred_crop = final_pred[:, :, y0:y1, x0:x1].clone()
+        
+        final_pred_crop_smooth = TF.gaussian_blur(
+            final_pred_crop,
+            kernel_size=21,   # keep small to avoid over-blurring
+            sigma=2
+        )
+        
+        final_pred[:, :, y0:y1, x0:x1] = final_pred_crop_smooth
+        final_pred[(text_ornament_mask==0).expand(-1, 3, -1, -1)] = rgb_image[(text_ornament_mask==0).expand(-1, 3, -1, -1)] # overwrite text and ornaments with original (non-bleed-through) pixels, to be sure not to alter them
+    except:
+        import ipdb; ipdb.set_trace()
     return final_pred
 
 pred_source = run_patchwise_inference(source, model, target, device, small_hole_size, patch_size=512, one_shot=False)

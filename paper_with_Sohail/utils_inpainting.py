@@ -39,89 +39,11 @@ def make_holes(image, min_hole_size=50, max_hole_size=200, max_holes=10):
     
     return rgb_image, mask, holes_mask
 
-# def make_holes_with_mouse(image, max_hole_size=100):
-#     rgb_image = image[:, :, :3]
-#     mask = image[:, :, 3]
-#     mask = (mask > 127).astype(np.uint8)
-
-#     h, w, _ = rgb_image.shape
-#     holes_mask = np.zeros((h, w), dtype=np.uint8)
-
-#     fig, ax = plt.subplots(figsize=(15,10))
-#     ax.imshow(rgb_image)
-#     ax.set_title(
-#         f"Draw holes with mouse (max {max_hole_size}px per side, press ENTER to finish)"
-#     )
-#     ax.axis("off")
-
-#     rectangles = []
-
-#     def onselect(eclick, erelease):
-#         x1, y1 = int(eclick.xdata), int(eclick.ydata)
-#         x2, y2 = int(erelease.xdata), int(erelease.ydata)
-
-#         x_min, x_max = min(x1, x2), max(x1, x2)
-#         y_min, y_max = min(y1, y2), max(y1, y2)
-
-#         width = x_max - x_min
-#         height = y_max - y_min
-
-#         # Size constraint check
-#         if width > max_hole_size or height > max_hole_size:
-#             print(
-#                 f"Rectangle too large "
-#                 f"(width={width}, height={height}). "
-#                 f"Please draw again (max {max_hole_size}px)."
-#             )
-#             ax.set_title(
-#                 f"Rectangle too large! Max {max_hole_size}px per side. Draw again."
-#             )
-#             fig.canvas.draw_idle()
-#             return  # reject this rectangle
-
-#         # Accept rectangle
-#         rectangles.append((x_min, y_min, x_max, y_max))
-
-#         rect = plt.Rectangle(
-#             (x_min, y_min),
-#             width, height,
-#             edgecolor="red",
-#             facecolor="none",
-#             linewidth=2
-#         )
-#         ax.add_patch(rect)
-#         ax.set_title("Rectangle accepted. Draw more or press ENTER to finish.")
-#         fig.canvas.draw_idle()
-
-#     toggle_selector = RectangleSelector(
-#         ax,
-#         onselect,
-#         useblit=True,
-#         button=[1],
-#         minspanx=5,
-#         minspany=5,
-#         spancoords="pixels",
-#         interactive=True
-#     )
-
-#     plt.connect(
-#         "key_press_event",
-#         lambda event: plt.close() if event.key == "enter" else None
-#     )
-#     plt.show()
-
-#     # Apply mask constraint
-#     for x1, y1, x2, y2 in rectangles:
-#         region = mask[y1:y2, x1:x2]
-#         if region.mean() > 0.8:
-#             holes_mask[y1:y2, x1:x2] = 1
-
-#     return rgb_image, mask, holes_mask
-
 def make_holes_with_mouse(image):
     rgb_image = image[:, :, :3]
     mask = image[:, :, 3]
-    mask = (mask > 127).astype(np.uint8)
+    
+    mask = (mask > 127).astype(np.uint8) # Binarization (0 or 1)
 
     h, w, _ = rgb_image.shape
     holes_mask = np.zeros((h, w), dtype=np.uint8)
@@ -178,9 +100,10 @@ def make_holes_with_mouse(image):
 
     # Apply mask constraint
     for x1, y1, x2, y2 in rectangles:
-        region = mask[y1:y2, x1:x2]
-        if region.mean() > 0.8:
-            holes_mask[y1:y2, x1:x2] = 1
+        # region = mask[y1:y2, x1:x2]
+        # if region.mean() > 0.8: # 1 background, 0 text and ornaments. This condition means: if there is not mostly background, then do not consider this rectangle as a hole to be inpainted.
+        #     holes_mask[y1:y2, x1:x2] = 1
+        holes_mask[y1:y2, x1:x2] = 1
 
     return rgb_image, mask, holes_mask
 

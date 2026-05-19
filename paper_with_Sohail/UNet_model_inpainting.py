@@ -14,19 +14,22 @@ class ResConvBlock(nn.Module):
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, 3, padding=1, device=device),
-            nn.BatchNorm2d(out_ch, device=device),
+            # nn.BatchNorm2d(out_ch, device=device),
+            nn.InstanceNorm2d(out_ch, device=device),
             self.relu
         )
 
         self.conv2 = nn.Sequential(
             nn.Conv2d(out_ch, out_ch, 3, padding=1, device=device),
-            nn.BatchNorm2d(out_ch, device=device)
+            # nn.BatchNorm2d(out_ch, device=device)
+            nn.InstanceNorm2d(out_ch, device=device)
         )
 
         if in_ch != out_ch:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_ch, out_ch, 1, device=device),
-                nn.BatchNorm2d(out_ch, device=device)
+                # nn.BatchNorm2d(out_ch, device=device)
+                nn.InstanceNorm2d(out_ch, device=device),
             )
         else:
             self.shortcut = nn.Identity()
@@ -46,13 +49,15 @@ class gating_signal(nn.Module):
     def __init__(self, in_dim, out_dim, device):
         super(gating_signal, self).__init__()
         self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, padding='same', device=device)
-        self.batch_norm = nn.BatchNorm2d(out_dim, device=device)
+        # self.batch_norm = nn.BatchNorm2d(out_dim, device=device)
+        self.InstanceNorm = nn.InstanceNorm2d(out_dim, device=device)
         self.relu = nn.ReLU(inplace=False)
         self.device = device
 
     def forward(self, x):
         x = self.conv(x)
-        x = self.batch_norm(x)
+        # x = self.batch_norm(x)
+        x = self.InstanceNorm(x)
         return self.relu(x)
 
 #########################################################################################################

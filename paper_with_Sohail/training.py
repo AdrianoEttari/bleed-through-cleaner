@@ -19,6 +19,23 @@ class masked_l1(torch.nn.Module):
         return torch.mean(
             torch.abs(pred - gt) * mask.unsqueeze(1)
         )
+        
+class grad_loss(torch.nn.Module):
+    def __init__(self):
+        super(grad_loss, self).__init__()
+
+    def forward(self, pred, gt, mask):
+        pred_dx = pred[:, :, :, 1:] - pred[:, :, :, :-1]
+        pred_dy = pred[:, :, 1:, :] - pred[:, :, :-1, :]
+        gt_dx = gt[:, :, :, 1:] - gt[:, :, :, :-1]
+        gt_dy = gt[:, :, 1:, :] - gt[:, :, :-1, :]
+        mask_dx = mask[:, :, 1:] * mask[:, :, :-1]
+        mask_dy = mask[:, 1:, :] * mask[:, :-1, :]
+        loss_x = torch.mean(torch.abs(pred_dx - gt_dx) * mask_dx.unsqueeze(1))
+        loss_y = torch.mean(torch.abs(pred_dy - gt_dy) * mask_dy.unsqueeze(1))
+        return loss_x + loss_y
+
+
 class Trainer:
     def __init__(
             self,
@@ -36,7 +53,8 @@ class Trainer:
         self.save_every = save_every
 
         self.device = device
-        self.loss_function = masked_l1()
+        self.maskedL1_loss_function = masked_l1()
+        self.grad_loss_function = grad_loss()
         if self.multiple_gpus:
             self.model = DDP(model, device_ids=[self.device], find_unused_parameters=True)
         else:
@@ -80,7 +98,7 @@ class Trainer:
         holes_mask = source[:, 4, :, :]
         output = self.model(rgb_corrupt)
         mask = text_mask * holes_mask
-        loss = self.loss_function(output, targets, mask)
+        loss = self.maskedL1_loss_function(output, targets, mask) + 0.1 * self.grad_loss_function(output, targets, mask)
         loss.backward()
         self.optimizer.step()
         return loss.item()  
@@ -134,18 +152,20 @@ patch_size = 1024
 
 multiple_gpus=False
 save_every=1
-batch_size=16
+batch_size=8
 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("USING", device, " device")
 snapshot_path="./snapshots"
 os.makedirs(snapshot_path, exist_ok=True)
 
-snapshot_filename = "snapshot_PathSize_"+str(patch_size)+".pt"
+snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_StyleTransf.pt"
 
 dataset_path = os.path.join("dataset_MAGIC_PatchSize"+str(patch_size))
 # dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
 
-train_dataset = get_data(".", dataset_path, max_hole_size=300)
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
+train_dataset = get_data(base_dir, dataset_path, max_hole_size=300)
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device).to(device)

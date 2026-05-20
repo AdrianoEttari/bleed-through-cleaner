@@ -97,7 +97,9 @@ class Trainer:
         text_mask = source[:, 3, :, :]
         holes_mask = source[:, 4, :, :]
         output = self.model(rgb_corrupt)
-        mask = text_mask * holes_mask
+        
+        mask = text_mask * holes_mask # text_mask 1 for background and 0 for text and ornaments. holes_mask 1 for holes and 0 for non-holes.
+        # So their product is 1 only for hole pixels that are background, which are the pixels we want to inpaint.
         loss = self.maskedL1_loss_function(output, targets, mask) + 0.1 * self.grad_loss_function(output, targets, mask)
         loss.backward()
         self.optimizer.step()
@@ -152,18 +154,19 @@ patch_size = 1024
 
 multiple_gpus=False
 save_every=1
-batch_size=8
+batch_size=2
+base_dir = os.path.dirname(os.path.abspath(__file__))
 device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("USING", device, " device")
-snapshot_path="./snapshots"
+snapshot_path=os.path.join(base_dir, "snapshots")
 os.makedirs(snapshot_path, exist_ok=True)
 
 snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_StyleTransf.pt"
 
-dataset_path = os.path.join("dataset_MAGIC_PatchSize"+str(patch_size))
+dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
 # dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
 
-base_dir = os.path.dirname(os.path.abspath(__file__))
+
 
 train_dataset = get_data(base_dir, dataset_path, max_hole_size=300)
 

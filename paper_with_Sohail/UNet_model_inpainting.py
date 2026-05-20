@@ -29,7 +29,7 @@ class ResConvBlock(nn.Module):
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_ch, out_ch, 1, device=device),
                 # nn.BatchNorm2d(out_ch, device=device)
-                nn.InstanceNorm2d(out_ch, device=device),
+                nn.InstanceNorm2d(out_ch, device=device)
             )
         else:
             self.shortcut = nn.Identity()

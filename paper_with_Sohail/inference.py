@@ -13,7 +13,8 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 # snapshot_path=os.path.join(base_dir, "./snapshots/snapshot.pt")
-snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt")
+# snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt")
+snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_StyleTransf.pt")
 
 
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device).to(device)

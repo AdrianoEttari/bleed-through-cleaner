@@ -142,7 +142,7 @@ def launch(args):
         print("Using multiple GPUs")
         init_process_group(backend="nccl")
         device = int(os.environ["LOCAL_RANK"])
-        torch.cuda.set_device(int(device))
+        torch.cuda.set_device(device)
     else:
         device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
         print(f"Using device: {device}")

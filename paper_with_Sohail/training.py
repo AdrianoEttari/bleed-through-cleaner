@@ -11,6 +11,19 @@ from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data.distributed import DistributedSampler
 from utils_inpainting import get_data
 
+
+
+def prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size):
+    dataset = get_data(base_dir, dataset_path, max_hole_size=300)
+
+    if multiple_gpus:
+        data_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(dataset, shuffle=True))
+    else:
+        data_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
+    
+    return data_loader
+    
+    
 class masked_l1(torch.nn.Module):
     def __init__(self):
         super(masked_l1, self).__init__()
@@ -56,7 +69,7 @@ class Trainer:
         self.maskedL1_loss_function = masked_l1()
         self.grad_loss_function = grad_loss()
         if self.multiple_gpus:
-            self.model = DDP(model, device_ids=[self.device], find_unused_parameters=True)
+            self.model = DDP(model, device_ids=[self.device], find_unused_parameters=False)
         else:
             self.model = model.to(self.device)
 
@@ -100,7 +113,9 @@ class Trainer:
         
         mask = text_mask * holes_mask # text_mask 1 for background and 0 for text and ornaments. holes_mask 1 for holes and 0 for non-holes.
         # So their product is 1 only for hole pixels that are background, which are the pixels we want to inpaint.
-        loss = self.maskedL1_loss_function(output, targets, mask) + 0.1 * self.grad_loss_function(output, targets, mask)
+        # loss = self.maskedL1_loss_function(output, targets, mask) + 0.1 * self.grad_loss_function(output, targets, mask)
+                
+        loss = self.maskedL1_loss_function(output, targets, mask)
         loss.backward()
         self.optimizer.step()
         return loss.item()  
@@ -152,25 +167,30 @@ from UNet_model_inpainting import ResidualUNet
 
 patch_size = 1024
 
-multiple_gpus=False
+multiple_gpus=True
 save_every=1
-batch_size=2
+batch_size=16
 base_dir = os.path.dirname(os.path.abspath(__file__))
-device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print("USING", device, " device")
+
 snapshot_path=os.path.join(base_dir, "snapshots")
 os.makedirs(snapshot_path, exist_ok=True)
 
-snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_StyleTransf.pt"
+snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_InstNorm.pt"
 
-dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
-# dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
+# dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
+dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
+#%%
 
+if multiple_gpus:
+    print("Using multiple GPUs")
+    init_process_group(backend="nccl")
+    device = int(os.environ["LOCAL_RANK"]) 
+    torch.cuda.set_device(device)
+else:
+    device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print("USING", device, " device")
 
-
-train_dataset = get_data(base_dir, dataset_path, max_hole_size=300)
-
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+train_loader = prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size)
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
@@ -179,4 +199,6 @@ num_epochs=500
 trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, snapshot_filename, train_loader, optimizer, device)
 trainer.train(num_epochs, snapshot_path, scheduler=None)
 
+if multiple_gpus:
+    destroy_process_group()
 # %%

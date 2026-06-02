@@ -10,8 +10,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data.distributed import DistributedSampler
 from utils_inpainting import get_data
-
-
+import torchvision
+import torch.nn as nn
 
 def prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size):
     dataset = get_data(base_dir, dataset_path, max_hole_size=300)
@@ -32,6 +32,7 @@ class masked_l1(torch.nn.Module):
         return torch.mean(
             torch.abs(pred - gt) * mask.unsqueeze(1)
         )
+           
         
 class grad_loss(torch.nn.Module):
     def __init__(self):
@@ -48,6 +49,29 @@ class grad_loss(torch.nn.Module):
         loss_y = torch.mean(torch.abs(pred_dy - gt_dy) * mask_dy.unsqueeze(1))
         return loss_x + loss_y
 
+
+class vgg_loss(torch.nn.Module):
+    def __init__(self):
+        super(vgg_loss, self).__init__()
+        vgg = torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1)
+        self.features = nn.Sequential(*list(vgg.features[:16]))
+        for p in self.features.parameters():
+            p.requires_grad = False
+
+    def forward(self, pred, target, mask, device, mean, std):
+        self.features = self.features.to(device)
+        
+        masked_pred = pred * mask.unsqueeze(1)
+        masked_target = target * mask.unsqueeze(1)
+        
+        pred = (masked_pred - mean) / std
+        target = (masked_target - mean) / std
+        pred_feat = self.features(pred.to(device))
+        target_feat = self.features(target.to(device))
+
+        return torch.mean(
+            torch.abs(pred_feat - target_feat)
+        )
 
 class Trainer:
     def __init__(
@@ -67,6 +91,11 @@ class Trainer:
 
         self.device = device
         self.maskedL1_loss_function = masked_l1()
+        self.vgg_loss_function = vgg_loss()
+        self.mean = torch.tensor([0.485, 0.456, 0.406], device=self.device).view(1,3,1,1)
+        self.std  = torch.tensor([0.229, 0.224, 0.225], device=self.device).view(1,3,1,1)
+        
+        
         self.grad_loss_function = grad_loss()
         if self.multiple_gpus:
             self.model = DDP(model, device_ids=[self.device], find_unused_parameters=False)
@@ -115,7 +144,12 @@ class Trainer:
         # So their product is 1 only for hole pixels that are background, which are the pixels we want to inpaint.
         # loss = self.maskedL1_loss_function(output, targets, mask) + 0.1 * self.grad_loss_function(output, targets, mask)
                 
-        loss = self.maskedL1_loss_function(output, targets, mask)
+        l1_loss = self.maskedL1_loss_function(output, targets, mask)
+
+        vgg_loss = self.vgg_loss_function(output, targets, mask, self.device, self.mean, self.std)
+        
+        loss = l1_loss + 0.1 * vgg_loss
+        
         loss.backward()
         self.optimizer.step()
         return loss.item()  
@@ -167,15 +201,16 @@ from UNet_model_inpainting import ResidualUNet
 
 patch_size = 1024
 
-multiple_gpus=True
+multiple_gpus=False
 save_every=1
-batch_size=16
+batch_size=8
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 snapshot_path=os.path.join(base_dir, "snapshots")
 os.makedirs(snapshot_path, exist_ok=True)
 
-snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_InstNorm.pt"
+# snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_InstNorm.pt"
+snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_BatchNorm_VGGloss.pt"
 
 # dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
 dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
@@ -190,8 +225,10 @@ else:
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("USING", device, " device")
 
+normalization="batch"
+
 train_loader = prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size)
-model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device).to(device)
+model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), normalization=normalization, device=device).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 num_epochs=500

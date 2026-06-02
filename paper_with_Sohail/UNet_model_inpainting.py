@@ -7,29 +7,38 @@ import torch
 #########################################################################################################
 
 class ResConvBlock(nn.Module):
-    def __init__(self, in_ch, out_ch, device="cuda"):
+    def __init__(self, in_ch, out_ch, normalization="batch", device="cuda"):
         super().__init__()
 
         self.relu = nn.ReLU(inplace=True)
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, 3, padding=1, device=device),
-            # nn.BatchNorm2d(out_ch, device=device),
-            nn.InstanceNorm2d(out_ch, device=device),
+            nn.BatchNorm2d(out_ch, device=device)
+                if normalization == "batch"
+                else nn.InstanceNorm2d(out_ch, device=device)
+                if normalization == "inst"
+                else nn.Identity(),
             self.relu
         )
-
+        
         self.conv2 = nn.Sequential(
             nn.Conv2d(out_ch, out_ch, 3, padding=1, device=device),
-            # nn.BatchNorm2d(out_ch, device=device)
-            nn.InstanceNorm2d(out_ch, device=device)
+            nn.BatchNorm2d(out_ch, device=device)
+                if normalization == "batch"
+                else nn.InstanceNorm2d(out_ch, device=device)
+                if normalization == "inst"
+                else nn.Identity(),
         )
 
         if in_ch != out_ch:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(in_ch, out_ch, 1, device=device),
-                # nn.BatchNorm2d(out_ch, device=device)
-                nn.InstanceNorm2d(out_ch, device=device)
+                nn.BatchNorm2d(out_ch, device=device)
+                    if normalization == "batch"
+                    else nn.InstanceNorm2d(out_ch, device=device)
+                    if normalization == "inst"
+                    else nn.Identity()
             )
         else:
             self.shortcut = nn.Identity()
@@ -46,18 +55,23 @@ class gating_signal(nn.Module):
     It just applies a 1x1 convolution followed by a batch normalization and a ReLU activation that 
     moves the depth dimension of the input tensor from in_dim to out_dim.
     '''
-    def __init__(self, in_dim, out_dim, device):
+    def __init__(self, in_dim, out_dim, normalization, device):
         super(gating_signal, self).__init__()
+        self.normalization = normalization
         self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, padding='same', device=device)
-        # self.batch_norm = nn.BatchNorm2d(out_dim, device=device)
-        self.InstanceNorm = nn.InstanceNorm2d(out_dim, device=device)
+        if normalization == "batch":
+            self.batch_norm = nn.BatchNorm2d(out_dim, device=device)
+        elif normalization=="inst":
+            self.InstanceNorm = nn.InstanceNorm2d(out_dim, device=device)
         self.relu = nn.ReLU(inplace=False)
         self.device = device
 
     def forward(self, x):
         x = self.conv(x)
-        # x = self.batch_norm(x)
-        x = self.InstanceNorm(x)
+        if self.normalization == "batch":
+            x = self.batch_norm(x)
+        elif self.normalization == "inst":
+            x = self.InstanceNorm(x)
         return self.relu(x)
 
 #########################################################################################################
@@ -68,7 +82,7 @@ class gating_signal(nn.Module):
 
 class ResidualUNet(nn.Module):
     def __init__(self, in_channels=3, out_channels=3,
-                 channels=(32, 64, 128, 256), device="cuda"):
+                 channels=(32, 64, 128, 256), normalization="batch", device="cuda"):
         super().__init__()
 
         # Initial projection
@@ -80,7 +94,7 @@ class ResidualUNet(nn.Module):
 
         for i in range(len(channels) - 1):
             self.enc_blocks.append(
-                ResConvBlock(channels[i], channels[i + 1], device=device)
+                ResConvBlock(channels[i], channels[i + 1], normalization=normalization, device=device)
             )
             self.downs.append(
                 nn.Conv2d(
@@ -94,7 +108,7 @@ class ResidualUNet(nn.Module):
             )
 
         # Bottleneck
-        self.bottleneck = ResConvBlock(channels[-1], channels[-1], device=device)
+        self.bottleneck = ResConvBlock(channels[-1], channels[-1], normalization=normalization, device=device)
 
         # Decoder
         self.ups = nn.ModuleList()
@@ -106,13 +120,13 @@ class ResidualUNet(nn.Module):
                 nn.ConvTranspose2d(dec_ch, enc_ch, kernel_size=2, stride=2, device=device)
             )
             self.dec_blocks.append(
-                ResConvBlock(enc_ch * 2, enc_ch, device=device)
+                ResConvBlock(enc_ch * 2, enc_ch, normalization=normalization, device=device)
             )
         
         self.gatings = nn.ModuleList()
         for i in range(len(channels)-1):
             self.gatings.append(
-                gating_signal(channels[::-1][i], channels[::-1][i+1], device=device)
+                gating_signal(channels[::-1][i], channels[::-1][i+1], normalization=normalization, device=device)
             )
         # Output
         self.output = nn.Conv2d(channels[0], out_channels, 1, device=device)

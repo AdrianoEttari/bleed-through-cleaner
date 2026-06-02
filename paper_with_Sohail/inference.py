@@ -13,11 +13,16 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 
 
 # snapshot_path=os.path.join(base_dir, "./snapshots/snapshot.pt")
-# snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt")
-snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_StyleTransf.pt")
+
+normalization = "inst"
+
+if normalization == "batch":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt")
+elif normalization == "inst":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_InstNorm.pt")
 
 
-model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device).to(device)
+model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device, normalization=normalization).to(device)
 
 snapshot = torch.load(snapshot_path,map_location=torch.device('cpu'), weights_only=True)
 model.load_state_dict(snapshot["MODEL_STATE"])
@@ -25,6 +30,7 @@ model.to(device)
 print(sum(p.numel() for p in model.parameters()))
 epochs_run = snapshot["EPOCHS_RUN"]
 print(f"Snapshot loaded from {snapshot_path}")
+print(f"Number of trained epochs: {epochs_run}")
 
 model.eval()
 

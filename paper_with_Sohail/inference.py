@@ -14,12 +14,15 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 
 # snapshot_path=os.path.join(base_dir, "./snapshots/snapshot.pt")
 
-normalization = "inst"
+normalization = "batch"
+loss_func_type = "vgg"
 
-if normalization == "batch":
+if normalization == "batch" and loss_func_type == "l1":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt")
-elif normalization == "inst":
+elif normalization == "inst" and loss_func_type == "l1":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_InstNorm.pt")
+elif normalization == "batch" and loss_func_type == "vgg":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_BatchNorm_VGGloss.pt")
 
 
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device, normalization=normalization).to(device)

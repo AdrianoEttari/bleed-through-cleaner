@@ -10,6 +10,8 @@ class ResConvBlock(nn.Module):
     def __init__(self, in_ch, out_ch, normalization="batch", device="cuda"):
         super().__init__()
 
+        normalization = normalization.lower()
+        
         self.relu = nn.ReLU(inplace=True)
 
         self.conv1 = nn.Sequential(
@@ -57,11 +59,11 @@ class gating_signal(nn.Module):
     '''
     def __init__(self, in_dim, out_dim, normalization, device):
         super(gating_signal, self).__init__()
-        self.normalization = normalization
+        self.normalization = normalization.lower()
         self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, padding='same', device=device)
-        if normalization == "batch":
+        if self.normalization == "batch":
             self.batch_norm = nn.BatchNorm2d(out_dim, device=device)
-        elif normalization=="inst":
+        elif self.normalization=="inst":
             self.InstanceNorm = nn.InstanceNorm2d(out_dim, device=device)
         self.relu = nn.ReLU(inplace=False)
         self.device = device
@@ -85,6 +87,7 @@ class ResidualUNet(nn.Module):
                  channels=(32, 64, 128, 256), normalization="batch", device="cuda"):
         super().__init__()
 
+        normalization = normalization.lower()
         # Initial projection
         self.conv0 = nn.Conv2d(in_channels, channels[0], 3, padding=1, device=device)
 

@@ -83,6 +83,7 @@ class Trainer:
             snapshot_filename,
             train_data,
             optimizer,
+            loss_func_type,
             device,
             ) -> None:
         
@@ -90,13 +91,14 @@ class Trainer:
         self.save_every = save_every
 
         self.device = device
+        
+        self.loss_func_type = loss_func_type
+        self.grad_loss_function = grad_loss()
         self.maskedL1_loss_function = masked_l1()
         self.vgg_loss_function = vgg_loss()
         self.mean = torch.tensor([0.485, 0.456, 0.406], device=self.device).view(1,3,1,1)
-        self.std  = torch.tensor([0.229, 0.224, 0.225], device=self.device).view(1,3,1,1)
-        
-        
-        self.grad_loss_function = grad_loss()
+        self.std  = torch.tensor([0.229, 0.224, 0.225], device=self.device).view(1,3,1,1)     
+
         if self.multiple_gpus:
             self.model = DDP(model, device_ids=[self.device], find_unused_parameters=False)
         else:
@@ -146,9 +148,11 @@ class Trainer:
                 
         l1_loss = self.maskedL1_loss_function(output, targets, mask)
 
-        vgg_loss = self.vgg_loss_function(output, targets, mask, self.device, self.mean, self.std)
-        
-        loss = l1_loss + 0.1 * vgg_loss
+        if self.loss_func_type.lower() == "vgg":
+            vgg_loss = self.vgg_loss_function(output, targets, mask, self.device, self.mean, self.std)
+            loss = l1_loss + 0.1 * vgg_loss
+        else:
+            loss = l1_loss
         
         loss.backward()
         self.optimizer.step()
@@ -209,8 +213,8 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 snapshot_path=os.path.join(base_dir, "snapshots")
 os.makedirs(snapshot_path, exist_ok=True)
 
-# snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_InstNorm.pt"
-snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_BatchNorm_VGGloss.pt"
+snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_InstNorm.pt"
+# snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_BatchNorm_VGGloss.pt"
 
 # dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
 dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
@@ -225,7 +229,8 @@ else:
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("USING", device, " device")
 
-normalization="batch"
+normalization="inst"
+loss_func_type = "l1" # "vgg" or "l1"
 
 train_loader = prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size)
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), normalization=normalization, device=device).to(device)
@@ -233,7 +238,11 @@ model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), n
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 num_epochs=500
 
-trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, snapshot_filename, train_loader, optimizer, device)
+trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, snapshot_filename, train_loader, optimizer, loss_func_type, device)
+
+print(f"\nUsing {loss_func_type} loss function for training.")
+print(f"Using {normalization} normalization in the model.\n")
+
 trainer.train(num_epochs, snapshot_path, scheduler=None)
 
 if multiple_gpus:

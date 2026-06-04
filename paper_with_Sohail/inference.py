@@ -153,35 +153,79 @@ import cv2
 
 small_hole_size = 50
 
-def BigHole_2_SmallHoles(hole_mask, small_hole_size):
-    hole_mask = hole_mask[0, 0]  # [H, W]
-    H, W = hole_mask.shape
+# def BigHole_2_SmallHoles(hole_mask, small_hole_size):
+#     hole_mask = hole_mask[0, 0]  # [H, W]
+#     H, W = hole_mask.shape
     
-    small_holes_masks = []
+#     small_holes_masks = []
 
-    # 1. Find bounding box of the hole
-    coords = np.argwhere(hole_mask == 1)
+#     # 1. Find bounding box of the hole
+#     coords = np.argwhere(hole_mask == 1)
     
-    y_min, x_min = coords.min(axis=0)
-    y_max, x_max = coords.max(axis=0) + 1  # exclusive
+#     y_min, x_min = coords.min(axis=0)
+#     y_max, x_max = coords.max(axis=0) + 1  # exclusive
 
-    # 2. Iterate over the rectangle only
-    for y in range(y_min, y_max, small_hole_size):
-        for x in range(x_min, x_max, small_hole_size):
+#     # 2. Iterate over the rectangle only
+#     for y in range(y_min, y_max, small_hole_size):
+#         for x in range(x_min, x_max, small_hole_size):
                 
-            end_y = min(y+small_hole_size, y_max)
-            end_x = min(x+small_hole_size, x_max)
-            patch = hole_mask[y:end_y, x:end_x]
+#             end_y = min(y+small_hole_size, y_max)
+#             end_x = min(x+small_hole_size, x_max)
+#             patch = hole_mask[y:end_y, x:end_x]
             
-            # Optional safety check
-            if np.all(patch == 1):
+#             # Optional safety check
+#             if np.all(patch == 1):
                 
+#                 small_mask = np.zeros_like(hole_mask)
+#                 small_mask[y:end_y, x:end_x] = 1
+
+#                 small_holes_masks.append(small_mask)
+
+#     return small_holes_masks
+
+def BigHole_2_SmallHoles(hole_mask,
+                         small_hole_size=50,
+                         overlap=10):
+
+    hole_mask = hole_mask[0, 0]  # [H,W]
+
+    coords = np.argwhere(hole_mask == 1)
+
+    if len(coords) == 0:
+        return []
+
+    H, W = hole_mask.shape
+
+    y_min, x_min = coords.min(axis=0)
+    y_max, x_max = coords.max(axis=0) + 1
+
+    stride = small_hole_size - overlap
+
+    if stride <= 0:
+        raise ValueError("overlap must be smaller than patch size")
+
+    small_masks = []
+
+    for y in range(y_min, y_max, stride):
+        for x in range(x_min, x_max, stride):
+
+            end_y = min(y + small_hole_size, y_max)
+            end_x = min(x + small_hole_size, x_max)
+
+            patch = hole_mask[y:end_y, x:end_x]
+
+            # keep only windows that intersect the hole
+            if np.any(patch):
+
                 small_mask = np.zeros_like(hole_mask)
-                small_mask[y:end_y, x:end_x] = 1
 
-                small_holes_masks.append(small_mask)
+                # preserve only the hole pixels in this window
+                small_mask[y:end_y, x:end_x] = patch
 
-    return small_holes_masks
+                small_masks.append(small_mask)
+
+    return small_masks
+
 
 def split_holes(holes_mask, connectivity=8):
     """
@@ -220,7 +264,8 @@ def split_holes(holes_mask, connectivity=8):
 def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_size=512, one_shot=False):
     source = source.to(device)  # [1, 5, H, W]
     B, C, H, W = source.shape
-    final_pred = rgb_image.clone()
+    final_pred = torch.zeros_like(rgb_image)
+    final_overlapping_mask = torch.zeros_like(rgb_image)
      
     holes_mask = source[:, 4:5, :, :].detach().cpu().numpy()
     holes_unique_masks = split_holes(holes_mask)
@@ -338,8 +383,7 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
                 
             final_pred[:, :, y0:y1, x0:x1][expanded_mask] = pred_crop[expanded_mask]
                             
-        else:
-            
+        else:  
             small_holes_masks = BigHole_2_SmallHoles(hole_mask, small_hole_size=hole_size)
 
             margin = 64  # context around the hole
@@ -451,19 +495,22 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
                 # --------------------------------------------------
                 # 9. Paste ONLY masked area into final_pred
                 # --------------------------------------------------
-                local_final = final_pred[:, :, y0:y1, x0:x1]
 
                 expanded_mask = mask_crop[:, :, :crop_H, :crop_W].bool() \
                     .expand(-1, 3, -1, -1)
 
-                local_final[expanded_mask] = pred_crop[expanded_mask]
-
-                final_pred[:, :, y0:y1, x0:x1] = local_final
+                final_pred[:, :, y0:y1, x0:x1][expanded_mask] += pred_crop[expanded_mask]
+                final_overlapping_mask[:, :, y0:y1, x0:x1][expanded_mask] += 1
+                
                 # plt.imshow(local_final[0].permute(1,2,0).detach().cpu().numpy())
                 # plt.savefig(str(i)+".png")
             
-
     coords = np.argwhere(hole_mask[0][0]==1)
+
+    final_pred /= final_overlapping_mask
+    holes_mask = np.repeat(holes_mask, 3, axis=1)  # [1,3,H,W]
+    final_pred[holes_mask == 0] = rgb_image[holes_mask == 0] # overwrite non-hole pixels with original, to be sure not to alter them
+    
     y_min, x_min = coords.min(axis=0)
     y_max, x_max = coords.max(axis=0) + 1
     y0 = max(0, y_min - margin)-margin
@@ -472,14 +519,13 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
     x1 = min(W, x_max + margin)+margin
     
     final_pred_crop = final_pred[:, :, y0:y1, x0:x1].clone()
-    
     final_pred_crop_smooth = TF.gaussian_blur(
         final_pred_crop,
-        kernel_size=21,   # keep small to avoid over-blurring
+        kernel_size=11,   # keep small to avoid over-blurring
         sigma=2
     )
-    
     final_pred[:, :, y0:y1, x0:x1] = final_pred_crop_smooth
+    
     final_pred[(text_ornament_mask==0).expand(-1, 3, -1, -1)] = rgb_image[(text_ornament_mask==0).expand(-1, 3, -1, -1)] # overwrite text and ornaments with original (non-bleed-through) pixels, to be sure not to alter them
 
     return final_pred

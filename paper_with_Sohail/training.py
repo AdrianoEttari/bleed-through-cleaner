@@ -207,17 +207,17 @@ patch_size = 1024
 
 multiple_gpus=False
 save_every=1
-batch_size=8
+batch_size=2
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 snapshot_path=os.path.join(base_dir, "snapshots")
 os.makedirs(snapshot_path, exist_ok=True)
 
-snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_InstNorm.pt"
+# snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_InstNorm.pt"
 # snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_BatchNorm_VGGloss.pt"
 
-# dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
-dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
+dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
+# dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
 #%%
 
 if multiple_gpus:
@@ -231,6 +231,8 @@ else:
 
 normalization="inst"
 loss_func_type = "l1" # "vgg" or "l1"
+
+snapshot_filename = f"snapshot_PathSize_{str(patch_size)}_Normal_{normalization}_Loss_{loss_func_type}.pt"
 
 train_loader = prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size)
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), normalization=normalization, device=device).to(device)

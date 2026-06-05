@@ -20,6 +20,8 @@ class ResConvBlock(nn.Module):
                 if normalization == "batch"
                 else nn.InstanceNorm2d(out_ch, device=device)
                 if normalization == "inst"
+                else nn.GroupNorm(8, out_ch, device=device)
+                if normalization == "group"
                 else nn.Identity(),
             self.relu
         )
@@ -30,6 +32,8 @@ class ResConvBlock(nn.Module):
                 if normalization == "batch"
                 else nn.InstanceNorm2d(out_ch, device=device)
                 if normalization == "inst"
+                else nn.GroupNorm(8, out_ch, device=device)
+                if normalization == "group"
                 else nn.Identity(),
         )
 
@@ -40,6 +44,8 @@ class ResConvBlock(nn.Module):
                     if normalization == "batch"
                     else nn.InstanceNorm2d(out_ch, device=device)
                     if normalization == "inst"
+                    else nn.GroupNorm(8, out_ch, device=device)
+                    if normalization == "group"
                     else nn.Identity()
             )
         else:
@@ -65,6 +71,8 @@ class gating_signal(nn.Module):
             self.batch_norm = nn.BatchNorm2d(out_dim, device=device)
         elif self.normalization=="inst":
             self.InstanceNorm = nn.InstanceNorm2d(out_dim, device=device)
+        elif self.normalization == "group":
+            self.GroupNorm = nn.GroupNorm(8, out_dim, device=device)
         self.relu = nn.ReLU(inplace=False)
         self.device = device
 
@@ -74,6 +82,8 @@ class gating_signal(nn.Module):
             x = self.batch_norm(x)
         elif self.normalization == "inst":
             x = self.InstanceNorm(x)
+        elif self.normalization == "group":
+            x = self.GroupNorm(x)
         return self.relu(x)
 
 #########################################################################################################
@@ -119,8 +129,14 @@ class ResidualUNet(nn.Module):
 
         for enc_ch, dec_ch in zip(reversed(channels[:-1]),
                                   reversed(channels[1:])):
+            # self.ups.append(
+            #     nn.ConvTranspose2d(dec_ch, enc_ch, kernel_size=2, stride=2, device=device)
+            # )
             self.ups.append(
-                nn.ConvTranspose2d(dec_ch, enc_ch, kernel_size=2, stride=2, device=device)
+                nn.Sequential(
+                    nn.Upsample(scale_factor=2, mode='bilinear', align_corners=False),
+                    nn.Conv2d(dec_ch, enc_ch, kernel_size=3, padding=1, device=device)
+                )
             )
             self.dec_blocks.append(
                 ResConvBlock(enc_ch * 2, enc_ch, normalization=normalization, device=device)

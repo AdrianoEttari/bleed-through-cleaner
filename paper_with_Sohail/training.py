@@ -12,14 +12,25 @@ from torch.utils.data.distributed import DistributedSampler
 from utils_inpainting import get_data
 import torchvision
 import torch.nn as nn
+import matplotlib.pyplot as plt
 
 def prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size):
     dataset = get_data(base_dir, dataset_path, max_hole_size=300)
 
     if multiple_gpus:
-        data_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=False, sampler=DistributedSampler(dataset, shuffle=True))
+        data_loader = torch.utils.data.DataLoader(dataset=dataset,
+                                                batch_size=batch_size,
+                                                # num_workers=4,
+                                                # pin_memory=True,
+                                                # persistent_workers=True,
+                                                sampler=DistributedSampler(dataset, shuffle=True))
     else:
-        data_loader = torch.utils.data.DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
+        data_loader = torch.utils.data.DataLoader(dataset=dataset,
+                                                batch_size=batch_size,
+                                                # num_workers=4,
+                                                # pin_memory=True,
+                                                # persistent_workers=True,
+                                                shuffle=True)
     
     return data_loader
     
@@ -55,19 +66,21 @@ class vgg_loss(torch.nn.Module):
         super(vgg_loss, self).__init__()
         vgg = torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1)
         self.features = nn.Sequential(*list(vgg.features[:16]))
+        self.features.to(device)
         for p in self.features.parameters():
             p.requires_grad = False
 
     def forward(self, pred, target, mask, device, mean, std):
-        self.features = self.features.to(device)
         
         masked_pred = pred * mask.unsqueeze(1)
         masked_target = target * mask.unsqueeze(1)
         
         pred = (masked_pred - mean) / std
         target = (masked_target - mean) / std
-        pred_feat = self.features(pred.to(device))
-        target_feat = self.features(target.to(device))
+        pred_feat = self.features(pred)
+
+        with torch.no_grad():
+            target_feat = self.features(target)
 
         return torch.mean(
             torch.abs(pred_feat - target_feat)
@@ -80,6 +93,7 @@ class Trainer:
             save_every: int,
             model: torch.nn.Module,
             snapshot_path,
+            results_path,
             snapshot_filename,
             train_data,
             optimizer,
@@ -110,6 +124,7 @@ class Trainer:
         self.save_every = save_every
         self.epochs_run = 0
         self.snapshot_path = snapshot_path
+        self.results_path = results_path
         self.snapshot_filename = snapshot_filename
         
         if not os.path.exists(self.snapshot_path):
@@ -127,11 +142,28 @@ class Trainer:
             self.train_data.sampler.set_epoch(epoch)
 
         running_train_loss = 0.0
+        
+        # if self.device == 0:
+        #     iterator = tqdm(enumerate(self.train_data), total=len(self.train_data), desc=f"GPU{self.device} Training")
+        # else:
+        #     iterator = enumerate(self.train_data)
+                
+        # for idx, (source, targets) in iterator:
         for idx, (source, targets) in tqdm(enumerate(self.train_data), total=len(self.train_data)):
             source, targets = source.to(self.device), targets.to(self.device)
             loss = self.run_batch(source, targets)
             running_train_loss += loss
 
+        if epoch % 25 == 0 and self.device == 0: # Save results from the rank 0 process
+            fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+            axs[0].imshow(source[0, :3, :, :].cpu().permute(1, 2, 0))
+            axs[0].set_title("Input")
+            axs[1].imshow(targets[0].cpu().permute(1, 2, 0))
+            axs[1].set_title("Ground Truth")
+            axs[2].imshow(self.model(source)[0].cpu().permute(1, 2, 0).detach())
+            axs[2].set_title("Output")
+            plt.savefig(os.path.join(self.results_path, f"Epoch_{epoch}.png"))
+            
         running_train_loss /= len(self.train_data)
         print(f"Epoch: {epoch} | Training Loss: {running_train_loss}")
 
@@ -206,18 +238,15 @@ from UNet_model_inpainting import ResidualUNet
 patch_size = 1024
 
 multiple_gpus=False
-save_every=1
-batch_size=2
+save_every=10
+batch_size=6
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 snapshot_path=os.path.join(base_dir, "snapshots")
 os.makedirs(snapshot_path, exist_ok=True)
 
-# snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_InstNorm.pt"
-# snapshot_filename = "snapshot_PathSize_"+str(patch_size)+"_BatchNorm_VGGloss.pt"
-
-dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
-# dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
+# dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
+dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
 #%%
 
 if multiple_gpus:
@@ -229,18 +258,21 @@ else:
     device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("USING", device, " device")
 
-normalization="inst"
-loss_func_type = "l1" # "vgg" or "l1"
+normalization="group"
+loss_func_type = "vgg" # "vgg" or "l1"
 
-snapshot_filename = f"snapshot_PathSize_{str(patch_size)}_Normal_{normalization}_Loss_{loss_func_type}.pt"
+snapshot_filename = f"snapshot_PathSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}.pt"
+results_path = os.path.join(base_dir, "results", f"Results_PatchSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}")
+os.makedirs(results_path, exist_ok=True)
 
 train_loader = prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size)
-model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), normalization=normalization, device=device).to(device)
+model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), normalization=normalization, device=device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 num_epochs=500
 
-trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, snapshot_filename, train_loader, optimizer, loss_func_type, device)
+
+trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, results_path, snapshot_filename, train_loader, optimizer, loss_func_type, device)
 
 print(f"\nUsing {loss_func_type} loss function for training.")
 print(f"Using {normalization} normalization in the model.\n")

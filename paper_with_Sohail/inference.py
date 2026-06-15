@@ -2,7 +2,7 @@
 import torch
 import os
 from UNet_model_inpainting import ResidualUNet
-from utils_inpainting import get_data
+
 multiple_gpus=False
 save_every=1
 batch_size=16
@@ -15,14 +15,20 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 # snapshot_path=os.path.join(base_dir, "./snapshots/snapshot.pt")
 
 normalization = "batch"
-loss_func_type = "l1"
+loss_func_type = "vgg"
+upsample=False
 
-if normalization == "batch" and loss_func_type == "l1":
-    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt")
-elif normalization == "inst" and loss_func_type == "l1":
-    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_InstNorm.pt")
-elif normalization == "batch" and loss_func_type == "vgg":
-    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_BatchNorm_VGGloss.pt")
+if upsample:
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Normal_batch_Loss_vgg_Upsample.pt")
+else:
+    if normalization == "batch" and loss_func_type == "l1":
+        snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt")
+    elif normalization == "inst" and loss_func_type == "l1":
+        snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_InstNorm.pt")
+    elif normalization == "batch" and loss_func_type == "vgg":
+        snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_BatchNorm_VGGloss.pt")
+    elif normalization == "group" and loss_func_type == "l1":
+        snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Normal_group_Loss_l1.pt")
 
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device, normalization=normalization).to(device)
 
@@ -37,6 +43,7 @@ print(f"Number of trained epochs: {epochs_run}")
 model.eval()
 
 #%% PROVA 1
+# from utils_inpainting import get_data
 
 # dataset_path = os.path.join("dataset_MAGIC_PatchSize1024_partial")
 # # dataset_path = r"D:/MAGIC/dataset_MAGIC/dataset_MAGIC"

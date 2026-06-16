@@ -1,6 +1,4 @@
 #%%
-from json.tool import main
-
 import torch
 import numpy as np
 import os
@@ -22,21 +20,11 @@ def prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size):
     if multiple_gpus:
         data_loader = torch.utils.data.DataLoader(dataset=dataset,
                                                 batch_size=batch_size,
-                                                sampler=DistributedSampler(dataset, shuffle=True),
-                                                num_workers=min(4, os.cpu_count()),
-                                                pin_memory=True,
-                                                persistent_workers=True,
-                                                prefetch_factor=4,
-                                                drop_last=True)
+                                                sampler=DistributedSampler(dataset, shuffle=True))
     else:
         data_loader = torch.utils.data.DataLoader(dataset=dataset,
                                                 batch_size=batch_size,
-                                                shuffle=True,
-                                                num_workers=min(4, os.cpu_count()),
-                                                pin_memory=True,
-                                                persistent_workers=True,
-                                                prefetch_factor=4,
-                                                drop_last=True)
+                                                shuffle=True)
     
     return data_loader
     
@@ -72,7 +60,6 @@ class vgg_loss(torch.nn.Module):
         super(vgg_loss, self).__init__()
         vgg = torchvision.models.vgg16(weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1)
         self.features = nn.Sequential(*list(vgg.features[:16]))
-        self.features.eval()
         self.features.to(device)
         for p in self.features.parameters():
             p.requires_grad = False
@@ -116,29 +103,15 @@ class Trainer:
         self.loss_func_type = loss_func_type
         self.grad_loss_function = grad_loss()
         self.maskedL1_loss_function = masked_l1()
-        # self.vgg_loss_function = vgg_loss()
-        self.vgg_loss_function = vgg_loss().to(device)
+        self.vgg_loss_function = vgg_loss()
         self.mean = torch.tensor([0.485, 0.456, 0.406], device=self.device).view(1,3,1,1)
         self.std  = torch.tensor([0.229, 0.224, 0.225], device=self.device).view(1,3,1,1)     
 
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        torch.backends.cudnn.benchmark = True
-        
         if self.multiple_gpus:
-            self.model = DDP(
-                model,
-                device_ids=[self.device],
-                output_device=self.device,
-                broadcast_buffers=False,
-                gradient_as_bucket_view=True,
-                static_graph=True
-            )
+            self.model = DDP(model, device_ids=[self.device], find_unused_parameters=False)
         else:
             self.model = model.to(self.device)
 
-        self.scaler = torch.cuda.amp.GradScaler()
-        
         self.model.train()
         self.train_data = train_data
         self.optimizer = optimizer
@@ -157,19 +130,17 @@ class Trainer:
             self.load_snapshot(os.path.join(self.snapshot_path, self.snapshot_filename))   
 
     def run_epoch(self, epoch: int):
-        # b_sz = len(next(iter(self.train_data))[0])
-        b_sz = self.train_data.batch_size
+        b_sz = len(next(iter(self.train_data))[0])
         print(f"\n\n[GPU{self.device}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
         if self.multiple_gpus:
             self.train_data.sampler.set_epoch(epoch)
 
-        running_train_loss = torch.zeros(1, device=self.device)
-        
+        running_train_loss = 0.0
+
         for idx, (source, targets) in tqdm(enumerate(self.train_data), total=len(self.train_data)):
-            source = source.to(self.device, non_blocking=True)
-            targets = targets.to(self.device, non_blocking=True)
+            source, targets = source.to(self.device), targets.to(self.device)
             loss = self.run_batch(source, targets)
-            running_train_loss += loss.detach()
+            running_train_loss += loss
 
         if self.multiple_gpus:
             saving_condition = (self.device == 0 and epoch % self.save_every == 0)
@@ -181,52 +152,35 @@ class Trainer:
             axs[0].set_title("Input")
             axs[1].imshow(targets[0].cpu().permute(1, 2, 0))
             axs[1].set_title("Ground Truth")
-            axs[2].imshow(self.output[0].cpu().permute(1, 2, 0).detach())
+            axs[2].imshow(self.model(source)[0].cpu().permute(1, 2, 0).detach())
             axs[2].set_title("Output")
             plt.savefig(os.path.join(self.results_path, f"Epoch_{epoch}.png"))
             
-            
-        if self.multiple_gpus:
-            torch.distributed.all_reduce(
-                running_train_loss,
-                op=torch.distributed.ReduceOp.SUM
-            )
-
-            running_train_loss /= (
-                len(self.train_data) *
-                torch.distributed.get_world_size()
-            )
-        else:
-            running_train_loss /= len(self.train_data)
-        epoch_loss = running_train_loss.cpu().item()
-        print(f"Epoch: {epoch} | Training Loss: {epoch_loss:.6f}")
+        running_train_loss /= len(self.train_data)
+        print(f"Epoch: {epoch} | Training Loss: {running_train_loss}")
 
     def run_batch(self, source, targets):
-        self.optimizer.zero_grad(set_to_none=True)
+        self.optimizer.zero_grad()
         rgb_corrupt = source[:, :3, :, :]
         text_mask = source[:, 3, :, :]
         holes_mask = source[:, 4, :, :]
-        with torch.autocast(device_type="cuda",dtype=torch.float16):
-            self.output = self.model(rgb_corrupt)
+        output = self.model(rgb_corrupt)
         
         mask = text_mask * holes_mask # text_mask 1 for background and 0 for text and ornaments. holes_mask 1 for holes and 0 for non-holes.
         # So their product is 1 only for hole pixels that are background, which are the pixels we want to inpaint.
         # loss = self.maskedL1_loss_function(output, targets, mask) + 0.1 * self.grad_loss_function(output, targets, mask)
                 
-        l1_loss = self.maskedL1_loss_function(self.output, targets, mask)
+        l1_loss = self.maskedL1_loss_function(output, targets, mask)
 
         if self.loss_func_type.lower() == "vgg":
-            vgg_loss = self.vgg_loss_function(self.output, targets, mask, self.device, self.mean, self.std)
+            vgg_loss = self.vgg_loss_function(output, targets, mask, self.device, self.mean, self.std)
             loss = l1_loss + 0.1 * vgg_loss
         else:
             loss = l1_loss
-            
         
-        self.scaler.scale(loss).backward()
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
-        
-        return loss
+        loss.backward()
+        self.optimizer.step()
+        return loss.item()  
 
     def save_snapshot(self, epoch: int, snapshot_path: str):
         snapshot = {}
@@ -270,57 +224,53 @@ class Trainer:
                 if epoch % self.save_every == 0:
                     self.save_snapshot(epoch, snapshot_path)
 
+#%%
+from UNet_model_inpainting import ResidualUNet
 
+patch_size = 1024
+
+multiple_gpus=False
+save_every=10
+batch_size=1
+base_dir = os.path.dirname(os.path.abspath(__file__))
+
+snapshot_path=os.path.join(base_dir, "snapshots")
+os.makedirs(snapshot_path, exist_ok=True)
+
+dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
+# dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
+#%%
+
+if multiple_gpus:
+    print("Using multiple GPUs")
+    init_process_group(backend="nccl")
+    device = int(os.environ["LOCAL_RANK"]) 
+    torch.cuda.set_device(device)
+else:
+    device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    print("USING", device, " device")
+
+normalization="group"
+loss_func_type = "vgg" # "vgg" or "l1"
+
+snapshot_filename = f"snapshot_PathSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}.pt"
+results_path = os.path.join(base_dir, "results", f"Results_PatchSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}")
+os.makedirs(results_path, exist_ok=True)
+
+train_loader = prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size)
+model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), normalization=normalization, device=device)
+
+optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+num_epochs=500
+
+
+trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, results_path, snapshot_filename, train_loader, optimizer, loss_func_type, device)
+
+print(f"\nUsing {loss_func_type} loss function for training.")
+print(f"Using {normalization} normalization in the model.\n")
+
+trainer.train(num_epochs, snapshot_path, scheduler=None)
+
+if multiple_gpus:
+    destroy_process_group()
 # %%
-
-if __name__ == "__main__":
-    from UNet_model_inpainting import ResidualUNet
-    import multiprocessing as mp
-    
-    mp.freeze_support()  # important on Windows
-
-    patch_size = 1024
-
-    multiple_gpus=False
-    save_every=10
-    batch_size=8
-    base_dir = os.path.dirname(os.path.abspath(__file__))
-
-    snapshot_path=os.path.join(base_dir, "snapshots")
-    os.makedirs(snapshot_path, exist_ok=True)
-
-    # dataset_path = os.path.join(base_dir, "dataset_MAGIC_PatchSize"+str(patch_size)+"_partial")
-    dataset_path = os.path.join("/data1","aettari","dataset_MAGIC_PatchSize"+str(patch_size))
-
-    if multiple_gpus:
-        print("Using multiple GPUs")
-        init_process_group(backend="nccl")
-        device = int(os.environ["LOCAL_RANK"]) 
-        torch.cuda.set_device(device)
-    else:
-        device=torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        print("USING", device, " device")
-
-    normalization="group"
-    loss_func_type = "vgg" # "vgg" or "l1"
-
-    snapshot_filename = f"snapshot_PathSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}.pt"
-    results_path = os.path.join(base_dir, "results", f"Results_PatchSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}")
-    os.makedirs(results_path, exist_ok=True)
-
-    train_loader = prepare_data_loader(base_dir, dataset_path, multiple_gpus, batch_size)
-    model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), normalization=normalization, device=device)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-    num_epochs=500
-
-
-    trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, results_path, snapshot_filename, train_loader, optimizer, loss_func_type, device)
-
-    print(f"\nUsing {loss_func_type} loss function for training.")
-    print(f"Using {normalization} normalization in the model.\n")
-
-    trainer.train(num_epochs, snapshot_path, scheduler=None)
-
-    if multiple_gpus:
-        destroy_process_group()

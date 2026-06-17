@@ -16,19 +16,15 @@ base_dir = os.path.dirname(os.path.abspath(__file__))
 
 normalization = "group"
 loss_func_type = "vgg"
-upsample=False
 
-if upsample:
-    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Normal_batch_Loss_vgg_Upsample.pt")
-else:
-    if normalization == "batch" and loss_func_type == "l1":
-        snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt") # ConvTranspose
-    elif normalization == "inst" and loss_func_type == "l1":
-        snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_InstNorm.pt") # ConvTranspose
-    elif normalization == "group" and loss_func_type == "vgg":
-        snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg.pt") # Upsample, Conv
-    elif normalization == "group" and loss_func_type == "l1":
-        snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_l1.pt") # Upsample, Conv
+if normalization == "batch" and loss_func_type == "l1":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt") # ConvTranspose
+elif normalization == "inst" and loss_func_type == "l1":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_InstNorm.pt") # ConvTranspose
+elif normalization == "group" and loss_func_type == "vgg":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg.pt") # Upsample, Conv
+elif normalization == "group" and loss_func_type == "l1":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_l1.pt") # Upsample, Conv
 
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device, normalization=normalization).to(device)
 

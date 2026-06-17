@@ -12,6 +12,7 @@ import numpy as np
 import json
 from patchify import patchify
 
+
 #%% FIND TEXT
 device = "cuda"
 patch_size = 1024

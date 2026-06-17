@@ -29,7 +29,6 @@ def darken_selected(img, factor=0.7):
     img *= factor
     return np.clip(img, 0, 255).astype(np.uint8)
 
-
 class bleed_through_cleaner:
     def __init__(self, image_path, models_folder_path, GPU_timing, device) -> None:
         self.image_path = image_path
@@ -692,6 +691,7 @@ class bleed_through_cleaner:
             image_to_inpaint[:,:,channel] = gaussian_denoised_image
         return image_to_inpaint, GPU_time
 
+    
 def manuscript_cleaning_and_timing_NLM(folder_data_path, 
                                     save_mask=True,
                                         ornament_model_name="Residual_attention_UNet_ornament_extraction",

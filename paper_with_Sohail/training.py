@@ -77,7 +77,7 @@ class vgg_loss(torch.nn.Module):
         for p in self.features.parameters():
             p.requires_grad = False
 
-    def forward(self, pred, target, mask, device, mean, std):
+    def forward(self, pred, target, mask, mean, std):
         
         masked_pred = pred * mask.unsqueeze(1)
         masked_target = target * mask.unsqueeze(1)
@@ -116,7 +116,6 @@ class Trainer:
         self.loss_func_type = loss_func_type
         self.grad_loss_function = grad_loss()
         self.maskedL1_loss_function = masked_l1()
-        # self.vgg_loss_function = vgg_loss()
         self.vgg_loss_function = vgg_loss().to(device)
         self.mean = torch.tensor([0.485, 0.456, 0.406], device=self.device).view(1,3,1,1)
         self.std  = torch.tensor([0.229, 0.224, 0.225], device=self.device).view(1,3,1,1)     
@@ -130,9 +129,9 @@ class Trainer:
                 model,
                 device_ids=[self.device],
                 output_device=self.device,
-                broadcast_buffers=False,
-                gradient_as_bucket_view=True,
-                static_graph=True
+                broadcast_buffers=False, # DDP does not synchronize model buffers (e.g. BatchNorm.running_mean and BatchNorm.running_var) from rank 0 to all other ranks every iteration
+                gradient_as_bucket_view=True, # gradients become views into the communication buckets. This lower GPU memory usage and there is faster gradient reduction
+                static_graph=True # If the computation graph never changes, then this option is preferred (less CPU overhead)
             )
         else:
             self.model = model.to(self.device)
@@ -157,7 +156,6 @@ class Trainer:
             self.load_snapshot(os.path.join(self.snapshot_path, self.snapshot_filename))   
 
     def run_epoch(self, epoch: int):
-        # b_sz = len(next(iter(self.train_data))[0])
         b_sz = self.train_data.batch_size
         print(f"\n\n[GPU{self.device}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)}")
         if self.multiple_gpus:
@@ -179,22 +177,21 @@ class Trainer:
             fig, axs = plt.subplots(1, 3, figsize=(15, 5))
             axs[0].imshow(source[0, :3, :, :].cpu().permute(1, 2, 0))
             axs[0].set_title("Input")
-            axs[1].imshow(targets[0].cpu().permute(1, 2, 0))
+            axs[1].imshow(targets[0].detach().cpu().permute(1, 2, 0))
             axs[1].set_title("Ground Truth")
-            axs[2].imshow(self.output[0].cpu().permute(1, 2, 0).detach())
+            axs[2].imshow(self.output[0].detach().cpu().permute(1, 2, 0))
             axs[2].set_title("Output")
             plt.savefig(os.path.join(self.results_path, f"Epoch_{epoch}.png"))
-            
             
         if self.multiple_gpus:
             torch.distributed.all_reduce(
                 running_train_loss,
                 op=torch.distributed.ReduceOp.SUM
-            )
+            ) # perform SUM of the running_train_loss among all ranks
 
             running_train_loss /= (
-                len(self.train_data) *
-                torch.distributed.get_world_size()
+                len(self.train_data) * # len(self.train_data) is the amount of batches each rank processed
+                torch.distributed.get_world_size() # num ranks
             )
         else:
             running_train_loss /= len(self.train_data)
@@ -216,7 +213,7 @@ class Trainer:
         l1_loss = self.maskedL1_loss_function(self.output, targets, mask)
 
         if self.loss_func_type.lower() == "vgg":
-            vgg_loss = self.vgg_loss_function(self.output, targets, mask, self.device, self.mean, self.std)
+            vgg_loss = self.vgg_loss_function(self.output, targets, mask, self.mean, self.std)
             loss = l1_loss + 0.1 * vgg_loss
         else:
             loss = l1_loss
@@ -283,7 +280,7 @@ if __name__ == "__main__":
 
     multiple_gpus=False
     save_every=10
-    batch_size=8
+    batch_size=5
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
     snapshot_path=os.path.join(base_dir, "snapshots")
@@ -313,7 +310,6 @@ if __name__ == "__main__":
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
     num_epochs=500
-
 
     trainer = Trainer(multiple_gpus, save_every, model, snapshot_path, results_path, snapshot_filename, train_loader, optimizer, loss_func_type, device)
 

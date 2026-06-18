@@ -136,7 +136,7 @@ class Trainer:
         else:
             self.model = model.to(self.device)
 
-        self.scaler = torch.cuda.amp.GradScaler()
+        self.scaler = torch.cuda.amp.GradScaler("cuda")
         
         self.model.train()
         self.train_data = train_data

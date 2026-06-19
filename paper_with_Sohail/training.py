@@ -136,7 +136,8 @@ class Trainer:
         else:
             self.model = model.to(self.device)
 
-        self.scaler = torch.cuda.amp.GradScaler("cuda")
+        # self.scaler = torch.cuda.amp.GradScaler("cuda")
+        self.scaler = torch.amp.GradScaler("cuda")
         
         self.model.train()
         self.train_data = train_data
@@ -208,17 +209,17 @@ class Trainer:
         
         mask = text_mask * holes_mask # text_mask 1 for background and 0 for text and ornaments. holes_mask 1 for holes and 0 for non-holes.
         # So their product is 1 only for hole pixels that are background, which are the pixels we want to inpaint.
-        # loss = self.maskedL1_loss_function(output, targets, mask) + 0.1 * self.grad_loss_function(output, targets, mask)
                 
         l1_loss = self.maskedL1_loss_function(self.output, targets, mask)
 
         if self.loss_func_type.lower() == "vgg":
             vgg_loss = self.vgg_loss_function(self.output, targets, mask, self.mean, self.std)
             loss = l1_loss + 0.1 * vgg_loss
-        else:
+        elif self.loss_func_type.lower() == "l1":
             loss = l1_loss
+        elif self.loss_func_type.lower() == "grad":
+            loss = self.maskedL1_loss_function(self.output, targets, mask) + 0.1 * self.grad_loss_function(self.output, targets, mask)
             
-        
         self.scaler.scale(loss).backward()
         self.scaler.step(self.optimizer)
         self.scaler.update()
@@ -299,7 +300,7 @@ if __name__ == "__main__":
         print("USING", device, " device")
 
     normalization="group"
-    loss_func_type = "vgg" # "vgg" or "l1"
+    loss_func_type = "grad" # "vgg" or "l1" or "grad"
 
     snapshot_filename = f"snapshot_PathSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}.pt"
     results_path = os.path.join(base_dir, "results", f"Results_PatchSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}")

@@ -53,6 +53,7 @@ class ResConvBlock(nn.Module):
 
     def forward(self, x):
         h = self.conv1(x)
+        
         h = self.conv2(h)
         return self.relu(h + self.shortcut(x))
 

@@ -1,4 +1,5 @@
-#%%
+#%% SETTINGS
+#I'm working on inpainting of bleed-through areas in ancient document parchemnts. Now I'm focusing on the re-creation of the parchment style background. To do so,  
 import torch
 import os
 from UNet_model_inpainting import ResidualUNet
@@ -147,7 +148,6 @@ if source.shape[2] != patch_size or source.shape[3] != patch_size:
     pad_w = (patch_size - source.shape[3] % patch_size) % patch_size
     source = F.pad(source, (0, pad_w, 0, pad_h))
     target = F.pad(target, (0, pad_w, 0, pad_h))
-    
 
 #%%
 import torchvision.transforms.functional as TF
@@ -159,6 +159,11 @@ def BigHole_2_SmallHoles(hole_mask,
                          small_hole_size=50,
                          overlap=10):
 
+    """
+    Take as input a big binary image with 0 values for the non masked areas and 1 values for the masked areas.
+    From the starting binary image are generated a series of binary images of the same size of the starting image, but with a smaller 
+    masked area: the masked area is splitted in smaller masked areas of size small_hole_size*small_hole_size
+    """
     hole_mask = hole_mask[0, 0]  # [H,W]
 
     coords = np.argwhere(hole_mask == 1)
@@ -232,344 +237,55 @@ def split_holes(holes_mask, connectivity=8):
 
     return masks
 
-# THIS VERSION TRIES TO USE 1024x1024 PATCHES FOR THE MODEL WITHOUT USING PADDING.
-# def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_size=512, one_shot=False):
-#     source = source.to(device)  # [1, 5, H, W]
-#     B, C, H, W = source.shape
-#     final_pred = torch.zeros_like(rgb_image)
-#     final_overlapping_mask = torch.zeros_like(rgb_image)
-     
-#     holes_mask = source[:, 4:5, :, :].detach().cpu().numpy()
-#     holes_unique_masks = split_holes(holes_mask)
-    
-#     for hole_mask in holes_unique_masks: 
-#         if one_shot:
-#             margin = 64  # context around the hole
-            
-#             text_ornament_mask = source[:, 3:4, :, :]
-            
-#             # --------------------------------------------------
-#             # 1. Build mask tensor
-#             # --------------------------------------------------
-
-#             mask_np = hole_mask==1
-            
-#             coords = np.argwhere(mask_np[0][0])
-
-#             y_min, x_min = coords.min(axis=0)
-#             y_max, x_max = coords.max(axis=0) + 1
-
-#             # --------------------------------------------------
-#             # 2. Add context margin
-#             # --------------------------------------------------
-#             y0 = max(0, y_min - margin)
-#             x0 = max(0, x_min - margin)
-
-#             y1 = min(H, y_max + margin)
-#             x1 = min(W, x_max + margin)
-
-#             # --------------------------------------------------
-#             # 3. Crop only local region
-#             # --------------------------------------------------
-#             rgb_crop = rgb_image[:, :, y0:y1, x0:x1].clone()
-
-#             mask_crop = mask_np[0][0][y0:y1, x0:x1]
-
-#             mask_crop = torch.tensor(
-#                 mask_crop,
-#                 device=device,
-#                 dtype=torch.bool
-#             )
-
-#             # --------------------------------------------------
-#             # 4. Corrupt ONLY masked region
-#             # --------------------------------------------------
-#             corrupted_crop = rgb_crop.clone()
-
-#             expanded_mask = mask_crop.unsqueeze(0).unsqueeze(0).expand(-1, 3, -1, -1)
-
-#             corrupted_crop[expanded_mask] = torch.rand(
-#                 corrupted_crop[expanded_mask].shape,
-#                 device=device
-#             )
-
-#             # --------------------------------------------------
-#             # 5. Pad locally
-#             # --------------------------------------------------
-#             crop_H = corrupted_crop.shape[2]
-#             crop_W = corrupted_crop.shape[3]
-
-#             pad_h = (patch_size - crop_H % patch_size) % patch_size
-#             pad_w = (patch_size - crop_W % patch_size) % patch_size
-
-#             corrupted_crop = F.pad(corrupted_crop, (0, pad_w, 0, pad_h))
-#             mask_crop = F.pad(mask_crop.float(), (0, pad_w, 0, pad_h))
-
-#             # --------------------------------------------------
-#             # 6. Patchify LOCAL crop only
-#             # --------------------------------------------------
-#             rgb_patches = corrupted_crop.unfold(2, patch_size, patch_size) \
-#                                         .unfold(3, patch_size, patch_size)
-
-#             B, C, nH, nW, _, _ = rgb_patches.shape
-
-#             rgb_patches = rgb_patches.permute(0, 2, 3, 1, 4, 5) \
-#                                     .reshape(-1, 3, patch_size, patch_size)
-
-#             # --------------------------------------------------
-#             # 7. Inference
-#             # --------------------------------------------------
-#             with torch.no_grad():
-#                 pred_patches = model(rgb_patches)
-
-#             # --------------------------------------------------
-#             # 8. Rebuild local prediction
-#             # --------------------------------------------------
-#             pred_crop = pred_patches.reshape(
-#                 B,
-#                 nH,
-#                 nW,
-#                 3,
-#                 patch_size,
-#                 patch_size
-#             )
-
-#             pred_crop = pred_crop.permute(0, 3, 1, 4, 2, 5)
-
-#             pred_crop = pred_crop.reshape(
-#                 B,
-#                 3,
-#                 nH * patch_size,
-#                 nW * patch_size
-#             )
-
-#             # Remove padding
-#             pred_crop = pred_crop[:, :, :crop_H, :crop_W]
-
-#             # --------------------------------------------------
-#             # 9. Paste ONLY masked area into final_pred
-#             # --------------------------------------------------
-
-#             expanded_mask = mask_crop.unsqueeze(0).unsqueeze(0)[:, :, :crop_H, :crop_W].bool() \
-#                 .expand(-1, 3, -1, -1)
-                
-#             final_pred[:, :, y0:y1, x0:x1][expanded_mask] = pred_crop[expanded_mask]
-                            
-#         else:  
-#             small_holes_masks = BigHole_2_SmallHoles(hole_mask, small_hole_size=hole_size, overlap=0)
-#             # plt.imshow(np.sum(small_holes_masks, axis=0));plt.show() # check the overlapping
-            
-#             text_ornament_mask = source[:, 3:4, :, :]
-            
-#             for i, small_holes_mask in enumerate(small_holes_masks):
-
-#                 # --------------------------------------------------
-#                 # 1. Build mask tensor (holes)
-#                 # --------------------------------------------------
-#                 mask_np = (small_holes_mask == 1)
-
-#                 coords = np.argwhere(mask_np)
-
-#                 if len(coords) == 0:
-#                     continue
-
-#                 y_min, x_min = coords.min(axis=0)
-#                 y_max, x_max = coords.max(axis=0) + 1
-
-#                 y_distance = y_max - y_min
-#                 x_distance = x_max - x_min
-
-#                 assert y_distance <= 1024
-#                 assert x_distance <= 1024
-#                 y_margin = (1024 - y_distance) // 2
-#                 x_margin = (1024 - x_distance) // 2
-                
-#                 # --------------------------------------------------
-#                 # 2. Add context margin
-#                 # --------------------------------------------------
-#                 y0 = max(0, y_min - y_margin)
-#                 x0 = max(0, x_min - x_margin)
-
-#                 y1 = min(H, y_max + y_margin)
-#                 x1 = min(W, x_max + x_margin)
-
-#                 # --------------------------------------------------
-#                 # 3. Crop only local region
-#                 # --------------------------------------------------
-#                 rgb_crop = rgb_image[:, :, y0:y1, x0:x1].clone()
-
-#                 mask_crop = mask_np[y0:y1, x0:x1]
-
-#                 mask_crop = torch.tensor(
-#                     mask_crop,
-#                     device=device,
-#                     dtype=torch.bool
-#                 ).unsqueeze(0).unsqueeze(0)
-
-#                 # --------------------------------------------------
-#                 # 4. Corrupt ONLY masked region
-#                 # --------------------------------------------------
-#                 corrupted_crop = rgb_crop.clone()
-
-#                 expanded_mask = mask_crop.expand(-1, 3, -1, -1)
-
-#                 corrupted_crop[expanded_mask] = torch.rand(
-#                     corrupted_crop[expanded_mask].shape,
-#                     device=device
-#                 )
-
-#                 # --------------------------------------------------
-#                 # 5. Pad locally
-#                 # --------------------------------------------------
-#                 crop_H = corrupted_crop.shape[2]
-#                 crop_W = corrupted_crop.shape[3]
-
-#                 pad_h = (patch_size - crop_H % patch_size) % patch_size
-#                 pad_w = (patch_size - crop_W % patch_size) % patch_size
-
-#                 corrupted_crop = F.pad(corrupted_crop, (0, pad_w, 0, pad_h))
-#                 mask_crop = F.pad(mask_crop.float(), (0, pad_w, 0, pad_h))
-
-#                 # --------------------------------------------------
-#                 # 6. Patchify LOCAL crop only
-#                 # --------------------------------------------------
-#                 rgb_patches = corrupted_crop.unfold(2, patch_size, patch_size) \
-#                                             .unfold(3, patch_size, patch_size)
-
-#                 B, C, nH, nW, _, _ = rgb_patches.shape
-
-#                 rgb_patches = rgb_patches.permute(0, 2, 3, 1, 4, 5) \
-#                                         .reshape(-1, 3, patch_size, patch_size)
-
-#                 # --------------------------------------------------
-#                 # 7. Inference
-#                 # --------------------------------------------------
-#                 with torch.no_grad():
-#                     pred_patches = model(rgb_patches)
-
-#                 if (x1-x0) != patch_size:
-#                     x_distance = patch_size - (x1-x0)
-#                     x0_adj = x0 - x_distance//2
-#                     x1_adj = x1 + x_distance//2
-#                     if x0_adj < 0:
-#                         x1_adj = x1 + x_distance
-#                         x0_adj = 0
-#                     if x1_adj > W:
-#                         x0_adj = x0 - x_distance
-#                         x1_adj = W
-#                 else:
-#                     x0_adj = x0
-#                     x1_adj = x1
-                    
-#                 if (y1-y0) != patch_size:
-#                     y_distance = patch_size - (y1-y0)
-#                     y0_adj = y0 - y_distance//2
-#                     y1_adj = y1 + y_distance//2
-#                     if y0_adj < 0:
-#                         y1_adj = y1 + y_distance
-#                         y0_adj = 0
-#                     if y1_adj > H:
-#                         y0_adj = y0 - y_distance
-#                         y1_adj = H
-#                 else:
-#                     y0_adj = y0
-#                     y1_adj = y1
-                    
-#                 if y1_adj - y0_adj != patch_size:
-#                     y1_adj += patch_size - (y1_adj - y0_adj)
-#                 if x1_adj - x0_adj != patch_size:
-#                     x1_adj += patch_size - (x1_adj - x0_adj)
-#                 mask = mask_crop.repeat(1,3,1,1)==1
-#                 final_pred[:, :, y0_adj:y1_adj, x0_adj:x1_adj][mask] += pred_patches[mask]
-#                 final_overlapping_mask[:, :, y0_adj:y1_adj, x0_adj:x1_adj][mask] += 1
-                
-#                 # plt.imshow(local_final[0].permute(1,2,0).detach().cpu().numpy())
-#                 # plt.savefig(str(i)+".png")
-            
-#     coords = np.argwhere(hole_mask[0][0]==1)
-
-#     final_pred /= final_overlapping_mask
-#     holes_mask = np.repeat(holes_mask, 3, axis=1)  # [1,3,H,W]
-#     final_pred[holes_mask == 0] = rgb_image[holes_mask == 0] # overwrite non-hole pixels with original, to be sure not to alter them
-    
-#     # final_pred_crop = final_pred[:, :, y0:y1, x0:x1].clone()
-#     # final_pred_crop_smooth = TF.gaussian_blur(
-#     #     final_pred_crop,
-#     #     kernel_size=11,   # keep small to avoid over-blurring
-#     #     sigma=2
-#     # )
-#     # final_pred[:, :, y0:y1, x0:x1] = final_pred_crop_smooth
-    
-#     final_pred[(text_ornament_mask==0).expand(-1, 3, -1, -1)] = rgb_image[(text_ornament_mask==0).expand(-1, 3, -1, -1)] # overwrite text and ornaments with original (non-bleed-through) pixels, to be sure not to alter them
-
-#     return final_pred
-
-
 def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_size=512, one_shot=False):
+
     source = source.to(device)  # [1, 5, H, W]
     B, C, H, W = source.shape
+
     final_pred = torch.zeros_like(rgb_image)
     final_overlapping_mask = torch.zeros_like(rgb_image)
-     
+
     holes_mask = source[:, 4:5, :, :].detach().cpu().numpy()
     holes_unique_masks = split_holes(holes_mask)
-    
-    for hole_mask in holes_unique_masks: 
-        if one_shot:
-            margin = 64  # context around the hole
-            
-            text_ornament_mask = source[:, 3:4, :, :]
-            
-            # --------------------------------------------------
-            # 1. Build mask tensor
-            # --------------------------------------------------
 
-            mask_np = hole_mask==1
-            
-            coords = np.argwhere(mask_np[0][0])
+    text_ornament_mask = source[:, 3:4, :, :]  # [1,1,H,W]
+
+    for hole_mask in holes_unique_masks:
+        # =========================================================
+        # ONE-SHOT MODE
+        # =========================================================
+        if one_shot:
+
+            margin = 64
+            mask_np = hole_mask[0, 0].astype(bool)
+
+            coords = np.argwhere(mask_np)
+            if len(coords) == 0:
+                continue
 
             y_min, x_min = coords.min(axis=0)
             y_max, x_max = coords.max(axis=0) + 1
 
-            # --------------------------------------------------
-            # 2. Add context margin
-            # --------------------------------------------------
             y0 = max(0, y_min - margin)
             x0 = max(0, x_min - margin)
-
             y1 = min(H, y_max + margin)
             x1 = min(W, x_max + margin)
 
-            # --------------------------------------------------
-            # 3. Crop only local region
-            # --------------------------------------------------
             rgb_crop = rgb_image[:, :, y0:y1, x0:x1].clone()
 
-            mask_crop = mask_np[0][0][y0:y1, x0:x1]
+            mask_crop_np = mask_np[y0:y1, x0:x1]
+            mask_crop = torch.from_numpy(mask_crop_np).to(device).bool()
 
-            mask_crop = torch.tensor(
-                mask_crop,
-                device=device,
-                dtype=torch.bool
-            )
-
-            # --------------------------------------------------
-            # 4. Corrupt ONLY masked region
-            # --------------------------------------------------
             corrupted_crop = rgb_crop.clone()
 
-            expanded_mask = mask_crop.unsqueeze(0).unsqueeze(0).expand(-1, 3, -1, -1)
+            expanded_mask = mask_crop.unsqueeze(0).unsqueeze(0).expand(1, 3, -1, -1)
 
             corrupted_crop[expanded_mask] = torch.rand(
                 corrupted_crop[expanded_mask].shape,
                 device=device
             )
 
-            # --------------------------------------------------
-            # 5. Pad locally
-            # --------------------------------------------------
-            crop_H = corrupted_crop.shape[2]
-            crop_W = corrupted_crop.shape[3]
+            crop_H, crop_W = corrupted_crop.shape[2], corrupted_crop.shape[3]
 
             pad_h = (patch_size - crop_H % patch_size) % patch_size
             pad_w = (patch_size - crop_W % patch_size) % patch_size
@@ -577,71 +293,44 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
             corrupted_crop = F.pad(corrupted_crop, (0, pad_w, 0, pad_h))
             mask_crop = F.pad(mask_crop.float(), (0, pad_w, 0, pad_h))
 
-            # --------------------------------------------------
-            # 6. Patchify LOCAL crop only
-            # --------------------------------------------------
-            rgb_patches = corrupted_crop.unfold(2, patch_size, patch_size) \
+            rgb_patches = corrupted_crop.unfold(2, patch_size, patch_size)\
                                         .unfold(3, patch_size, patch_size)
 
-            B, C, nH, nW, _, _ = rgb_patches.shape
+            _, _, nH, nW, _, _ = rgb_patches.shape
 
-            rgb_patches = rgb_patches.permute(0, 2, 3, 1, 4, 5) \
-                                    .reshape(-1, 3, patch_size, patch_size)
+            rgb_patches = rgb_patches.permute(0, 2, 3, 1, 4, 5)\
+                                     .reshape(-1, 3, patch_size, patch_size)
 
-            # --------------------------------------------------
-            # 7. Inference
-            # --------------------------------------------------
             with torch.no_grad():
                 pred_patches = model(rgb_patches)
 
-            # --------------------------------------------------
-            # 8. Rebuild local prediction
-            # --------------------------------------------------
             pred_crop = pred_patches.reshape(
-                B,
-                nH,
-                nW,
-                3,
-                patch_size,
-                patch_size
-            )
+                1, nH, nW, 3, patch_size, patch_size
+            ).permute(0, 3, 1, 4, 2, 5)\
+             .reshape(1, 3, nH * patch_size, nW * patch_size)
 
-            pred_crop = pred_crop.permute(0, 3, 1, 4, 2, 5)
-
-            pred_crop = pred_crop.reshape(
-                B,
-                3,
-                nH * patch_size,
-                nW * patch_size
-            )
-
-            # Remove padding
             pred_crop = pred_crop[:, :, :crop_H, :crop_W]
 
-            # --------------------------------------------------
-            # 9. Paste ONLY masked area into final_pred
-            # --------------------------------------------------
+            expanded_mask = mask_crop.bool().unsqueeze(0).unsqueeze(0).expand(1, 3, -1, -1)
 
-            expanded_mask = mask_crop.unsqueeze(0).unsqueeze(0)[:, :, :crop_H, :crop_W].bool() \
-                .expand(-1, 3, -1, -1)
-                
-            final_pred[:, :, y0:y1, x0:x1][expanded_mask] = pred_crop[expanded_mask]
-                            
-        else:  
-            small_holes_masks = BigHole_2_SmallHoles(hole_mask, small_hole_size=hole_size, overlap=10)
-            # plt.imshow(np.sum(small_holes_masks, axis=0));plt.show() # check the overlapping
+            region_pred = final_pred[:, :, y0:y1, x0:x1]
+            region_mask = final_overlapping_mask[:, :, y0:y1, x0:x1]
 
-            margin = 64  # context around the hole
-            
-            text_ornament_mask = source[:, 3:4, :, :]
-            
-            for i, small_holes_mask in enumerate(small_holes_masks):
+            region_pred += pred_crop * expanded_mask
+            region_mask += expanded_mask.float()
 
-                # --------------------------------------------------
-                # 1. Build mask tensor (holes)
-                # --------------------------------------------------
-                mask_np = (small_holes_mask == 1)
+        # =========================================================
+        # MULTI-HOLE MODE
+        # =========================================================
+        else:
 
+            small_holes_masks = BigHole_2_SmallHoles(
+                hole_mask, small_hole_size=hole_size, overlap=10
+            )
+
+            for small_holes_mask in small_holes_masks:
+
+                mask_np = small_holes_mask.astype(bool)
                 coords = np.argwhere(mask_np)
 
                 if len(coords) == 0:
@@ -650,131 +339,111 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
                 y_min, x_min = coords.min(axis=0)
                 y_max, x_max = coords.max(axis=0) + 1
 
-                # --------------------------------------------------
-                # 2. Add context margin
-                # --------------------------------------------------
-                y0 = max(0, y_min - margin)
-                x0 = max(0, x_min - margin)
+                center_y = (y_min + y_max) // 2
+                center_x = (x_min + x_max) // 2
 
-                y1 = min(H, y_max + margin)
-                x1 = min(W, x_max + margin)
+                y0 = max(0, center_y - patch_size // 2)
+                x0 = max(0, center_x - patch_size // 2)
+                y1 = min(H, center_y + patch_size // 2)
+                x1 = min(W, center_x + patch_size // 2)
 
-                # --------------------------------------------------
-                # 3. Crop only local region
-                # --------------------------------------------------
                 rgb_crop = rgb_image[:, :, y0:y1, x0:x1].clone()
-
-                mask_crop = mask_np[y0:y1, x0:x1]
-
-                mask_crop = torch.tensor(
-                    mask_crop,
-                    device=device,
-                    dtype=torch.bool
-                ).unsqueeze(0).unsqueeze(0)
-
-                # --------------------------------------------------
-                # 4. Corrupt ONLY masked region
-                # --------------------------------------------------
                 corrupted_crop = rgb_crop.clone()
 
-                expanded_mask = mask_crop.expand(-1, 3, -1, -1)
+                # ---- shift coords into crop space ----
+                y_coords = coords[:, 0] - y0 # rgb_crop is the crop on rgb_image and coords works on rgb_image, so we must shift coords into the domain of rgb_crop
+                x_coords = coords[:, 1] - x0 #
 
-                corrupted_crop[expanded_mask] = torch.rand(
-                    corrupted_crop[expanded_mask].shape,
+                valid = (
+                    (y_coords >= 0) & (y_coords < (y1 - y0)) &
+                    (x_coords >= 0) & (x_coords < (x1 - x0))
+                ) # It's possible that some coord is smaller than y0 or x0 and also be sure that they are inside [y1,y0] and [x1,x0]
+
+                y_coords = y_coords[valid]
+                x_coords = x_coords[valid]
+
+                if len(y_coords) == 0:
+                    continue
+
+                y_t = torch.from_numpy(y_coords).to(device)
+                x_t = torch.from_numpy(x_coords).to(device)
+
+                corrupted_crop[:, :, y_t, x_t] = torch.rand(
+                    (3, len(y_t)),
                     device=device
                 )
 
-                # --------------------------------------------------
-                # 5. Pad locally
-                # --------------------------------------------------
-                crop_H = corrupted_crop.shape[2]
-                crop_W = corrupted_crop.shape[3]
-
+                crop_H, crop_W = corrupted_crop.shape[2], corrupted_crop.shape[3]
+                # In case the crop is not (1024,1024) sized (that is possible if the (center_x, center_y) point was on the board of rgb_img), pad the image in order to be that size.
                 pad_h = (patch_size - crop_H % patch_size) % patch_size
                 pad_w = (patch_size - crop_W % patch_size) % patch_size
 
-                corrupted_crop = F.pad(corrupted_crop, (0, pad_w, 0, pad_h))
-                mask_crop = F.pad(mask_crop.float(), (0, pad_w, 0, pad_h))
-
-                # --------------------------------------------------
-                # 6. Patchify LOCAL crop only
-                # --------------------------------------------------
-                rgb_patches = corrupted_crop.unfold(2, patch_size, patch_size) \
-                                            .unfold(3, patch_size, patch_size)
-
-                B, C, nH, nW, _, _ = rgb_patches.shape
-
-                rgb_patches = rgb_patches.permute(0, 2, 3, 1, 4, 5) \
-                                        .reshape(-1, 3, patch_size, patch_size)
-
-                # --------------------------------------------------
-                # 7. Inference
-                # --------------------------------------------------
-                with torch.no_grad():
-                    pred_patches = model(rgb_patches)
-
-                # --------------------------------------------------
-                # 8. Rebuild local prediction
-                # --------------------------------------------------
-                pred_crop = pred_patches.reshape(
-                    B,
-                    nH,
-                    nW,
-                    3,
-                    patch_size,
-                    patch_size
-                )
-
-                pred_crop = pred_crop.permute(0, 3, 1, 4, 2, 5)
-
-                pred_crop = pred_crop.reshape(
-                    B,
-                    3,
-                    nH * patch_size,
-                    nW * patch_size
-                )
-
-                # Remove padding
-                pred_crop = pred_crop[:, :, :crop_H, :crop_W]
-
-                # --------------------------------------------------
-                # 9. Paste ONLY masked area into final_pred
-                # --------------------------------------------------
-
-                expanded_mask = mask_crop[:, :, :crop_H, :crop_W].bool() \
-                    .expand(-1, 3, -1, -1)
-
-                final_pred[:, :, y0:y1, x0:x1][expanded_mask] += pred_crop[expanded_mask]
-                final_overlapping_mask[:, :, y0:y1, x0:x1][expanded_mask] += 1
+                if pad_h!=0:
+                    # print("Padding H!!!")
+                    y0_new = y0-pad_h
+                    if y0_new < 0:
+                        y1 = y1+pad_h
+                    else:
+                        y0 = y0_new
+                if pad_w!=0:
+                    # print("Padding W!!!")
+                    x0_new = x0-pad_w
+                    if x0_new < 0:
+                        x1 = x1+pad_w
+                    else:
+                        x0 = x0_new
                 
-                # plt.imshow(local_final[0].permute(1,2,0).detach().cpu().numpy())
-                # plt.savefig(str(i)+".png")
-            
-    coords = np.argwhere(hole_mask[0][0]==1)
+                corrupted_pad = F.pad(corrupted_crop, (0, pad_w, 0, pad_h))
 
-    final_pred /= final_overlapping_mask
-    holes_mask = np.repeat(holes_mask, 3, axis=1)  # [1,3,H,W]
-    final_pred[holes_mask == 0] = rgb_image[holes_mask == 0] # overwrite non-hole pixels with original, to be sure not to alter them
-    
-    # y_min, x_min = coords.min(axis=0)
-    # y_max, x_max = coords.max(axis=0) + 1
-    # y0 = max(0, y_min - margin)-margin
-    # x0 = max(0, x_min - margin)-margin
-    # y1 = min(H, y_max + margin)+margin
-    # x1 = min(W, x_max + margin)+margin
-    # final_pred_crop = final_pred[:, :, y0:y1, x0:x1].clone()
-    # final_pred_crop_smooth = TF.gaussian_blur(
-    #     final_pred_crop,
-    #     kernel_size=11,   # keep small to avoid over-blurring
-    #     sigma=2
-    # )
-    # final_pred[:, :, y0:y1, x0:x1] = final_pred_crop_smooth
-    
-    final_pred[(text_ornament_mask==0).expand(-1, 3, -1, -1)] = rgb_image[(text_ornament_mask==0).expand(-1, 3, -1, -1)] # overwrite text and ornaments with original (non-bleed-through) pixels, to be sure not to alter them
+
+                with torch.no_grad():
+                    pred = model(corrupted_pad)
+
+                mask_crop_np = mask_np[y0:y1, x0:x1]
+                # mask_crop_np = np.pad(mask_crop_np, [(0,pad_h), (0, pad_w)], mode="constant")
+                
+                expanded_mask = torch.from_numpy(mask_crop_np)\
+                    .to(device)\
+                    .bool()\
+                    .unsqueeze(0)\
+                    .unsqueeze(0)\
+                    .expand(1, 3, -1, -1) 
+
+                region_pred = final_pred[:, :, y0:y1, x0:x1] # It updates final_pred and final_overlapping_mask with aliasing 
+                region_mask = final_overlapping_mask[:, :, y0:y1, x0:x1]
+
+                region_pred += pred * expanded_mask
+                region_mask += expanded_mask.float()
+                
+                # fig, axs = plt.subplots(1,2, figsize=(15,10))
+                # img1 = final_pred.clone()
+                # img2 = final_overlapping_mask.clone()
+                # img1 = (img1-img1.min())/(img1.max()-img1.min())
+                # img2 = (img2-img2.min())/(img2.max()-img2.min())
+                # axs[0].imshow(img1[0].permute(1,2,0).detach().cpu())
+                # axs[1].imshow(img2[0].permute(1,2,0).detach().cpu())
+                # plt.show()
+    # =========================================================
+    # FINAL NORMALIZATION
+    # =========================================================
+    final_pred = final_pred / torch.clamp(final_overlapping_mask, min=1.0)
+
+    holes_mask_3c = np.repeat(holes_mask, 3, axis=1)
+    holes_mask_t = torch.from_numpy(holes_mask_3c).to(device).bool()
+
+    final_pred[~holes_mask_t] = rgb_image[~holes_mask_t] # The areas of final_pred not masked in holes_mask_t are equal to the original image 
+
+    final_pred[(text_ornament_mask == 0).expand(-1, 3, -1, -1)] = \
+        rgb_image[(text_ornament_mask == 0).expand(-1, 3, -1, -1)] # The text and the ornaments are placed on the predicted area
 
     return final_pred
 
 pred_source = run_patchwise_inference(source, model, target, device, small_hole_size, patch_size=1024, one_shot=False)
+
+# PROBLEMS: 
+# * too small contiguity
+# * chessboard effect
+# * patterns are not perfectly aligned with the parchment
 
 #%% SHOW RESULTS
 rgb_corrupt = source[:, :3, :, :]

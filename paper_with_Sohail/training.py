@@ -175,12 +175,13 @@ class Trainer:
         else:
             saving_condition = (epoch % self.save_every == 0)
         if saving_condition:
+            output_to_plot = self.output.to(torch.float32)
             fig, axs = plt.subplots(1, 3, figsize=(15, 5))
             axs[0].imshow(source[0, :3, :, :].cpu().permute(1, 2, 0))
             axs[0].set_title("Input")
             axs[1].imshow(targets[0].detach().cpu().permute(1, 2, 0))
             axs[1].set_title("Ground Truth")
-            axs[2].imshow(self.output[0].detach().cpu().permute(1, 2, 0))
+            axs[2].imshow(output_to_plot[0].detach().cpu().permute(1, 2, 0))
             axs[2].set_title("Output")
             plt.savefig(os.path.join(self.results_path, f"Epoch_{epoch}.png"))
             
@@ -281,7 +282,7 @@ if __name__ == "__main__":
 
     multiple_gpus=False
     save_every=10
-    batch_size=5
+    batch_size=4
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
     snapshot_path=os.path.join(base_dir, "snapshots")
@@ -300,7 +301,7 @@ if __name__ == "__main__":
         print("USING", device, " device")
 
     normalization="group"
-    loss_func_type = "grad" # "vgg" or "l1" or "grad"
+    loss_func_type = "l1" # "vgg" or "l1" or "grad"
 
     snapshot_filename = f"snapshot_PathSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}.pt"
     results_path = os.path.join(base_dir, "results", f"Results_PatchSize_{str(patch_size)}_Norm_{normalization}_Loss_{loss_func_type}")

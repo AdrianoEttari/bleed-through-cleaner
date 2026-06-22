@@ -26,6 +26,11 @@ elif normalization == "group" and loss_func_type == "vgg":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg.pt") # Upsample, Conv
 elif normalization == "group" and loss_func_type == "l1":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_l1.pt") # Upsample, Conv
+elif normalization == "group" and loss_func_type == "grad":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_grad.pt") # Upsample, Conv
+elif normalization == "group" and loss_func_type == "vgg_strong":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg_strong.pt") # Upsample, Conv
+
 
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device, normalization=normalization).to(device)
 
@@ -93,6 +98,7 @@ from bleed_through_cleaner import bleed_through_cleaner
 import torch
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
+import cv2
 
 json_path = os.path.join(base_dir, "images_with_and_without_bleed_through.json")
 
@@ -153,7 +159,7 @@ if source.shape[2] != patch_size or source.shape[3] != patch_size:
 import torchvision.transforms.functional as TF
 import cv2
 
-small_hole_size = 80
+small_hole_size = 50
 
 def BigHole_2_SmallHoles(hole_mask,
                          small_hole_size=50,
@@ -190,7 +196,7 @@ def BigHole_2_SmallHoles(hole_mask,
             end_x = min(x + small_hole_size, x_max)
 
             patch = hole_mask[y:end_y, x:end_x]
-
+            
             # keep only windows that intersect the hole
             if np.any(patch):
 
@@ -203,6 +209,81 @@ def BigHole_2_SmallHoles(hole_mask,
 
     return small_masks
 
+def blend_borders(pred_img, orig_img, mask_of_holes, kernel_size=21):
+    mask_of_holes = (mask_of_holes > 0).astype(np.uint8)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    eroded = cv2.erode(mask_of_holes[0][0], kernel, iterations=1)
+        
+    mask_of_holes_t = torch.from_numpy(mask_of_holes).to(device)
+    eroded_t = torch.from_numpy(eroded).to(device).unsqueeze(0).unsqueeze(0)
+
+    blend_band = mask_of_holes_t-eroded_t
+    blend_band = blend_band.expand(-1,3,-1,-1)
+    
+    pred_img[blend_band==1] = pred_img[blend_band==1]*0.5 + orig_img[blend_band==1]*0.5
+    return pred_img, mask_of_holes_t
+
+# def match_low_freq(pred, orig, mask, kernel=51):
+#     """
+#     pred, orig: (B, 3, H, W)
+#     mask: either (H, W) or (B, 1, H, W)
+#     """
+
+#     # --- ensure mask shape ---
+#     if isinstance(mask, torch.Tensor):
+#         mask_t = mask
+#     else:
+#         mask_t = torch.from_numpy(mask)
+
+#     if mask_t.ndim == 2:
+#         mask_t = mask_t[None, None, ...]  # (1,1,H,W)
+#     elif mask_t.ndim == 3:
+#         mask_t = mask_t.unsqueeze(1)
+
+#     mask_t = mask_t.to(pred.device).float()
+
+#     # expand to 3 channels
+#     mask_t = mask_t.expand(-1, 3, -1, -1)
+
+#     # --- low-frequency (blur) ---
+#     pad = kernel // 2
+#     pred_blur = F.avg_pool2d(pred, kernel, stride=1, padding=pad)
+#     orig_blur = F.avg_pool2d(orig, kernel, stride=1, padding=pad)
+    
+#     strength = 0.2  # try 0.3–0.7
+
+#     corrected = pred + (orig_blur - pred_blur) * mask_t * strength
+
+#     return corrected
+
+# def blend_borders(pred_img, orig_img, mask_of_holes, device, feather=25):
+#     pred_img_new = match_low_freq(pred_img, orig_img, mask_of_holes)
+#     if mask_of_holes.ndim == 2:
+#         mask = mask_of_holes[None, None, ...]
+#     elif mask_of_holes.ndim == 4:
+#         mask = mask_of_holes
+#     else:
+#         raise ValueError("Unexpected mask shape")
+
+#     mask_np = mask[0, 0].astype(np.uint8)
+
+#     # Distance from edge INSIDE the mask
+#     dist = cv2.distanceTransform(mask_np, cv2.DIST_L2, 5)
+
+#     # Normalize within feather region
+#     alpha_np = np.clip(dist / feather, 0, 1)
+
+#     # Smooth a bit to avoid harsh gradients
+#     alpha_np = cv2.GaussianBlur(alpha_np, (0, 0), sigmaX=feather/4)
+
+#     alpha = torch.from_numpy(alpha_np).float().to(device)[None, None, ...]
+#     alpha = alpha.expand(-1, 3, -1, -1)
+
+#     out = pred_img_new * alpha + orig_img * (1 - alpha)
+
+#     return out, torch.from_numpy(mask_np[None, None]).to(device)
+
+    
 def split_holes(holes_mask, connectivity=8):
     """
     holes_mask: [1,1,H,W] or [H,W], binary {0,1}
@@ -378,29 +459,32 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
                 pad_h = (patch_size - crop_H % patch_size) % patch_size
                 pad_w = (patch_size - crop_W % patch_size) % patch_size
 
+                left,right,top,bottom=0,0,0,0
                 if pad_h!=0:
                     # print("Padding H!!!")
                     y0_new = y0-pad_h
                     if y0_new < 0:
+                        bottom=pad_h
                         y1 = y1+pad_h
                     else:
+                        top=pad_h
                         y0 = y0_new
                 if pad_w!=0:
                     # print("Padding W!!!")
                     x0_new = x0-pad_w
                     if x0_new < 0:
+                        right=pad_w
                         x1 = x1+pad_w
                     else:
+                        left=pad_w
                         x0 = x0_new
                 
-                corrupted_pad = F.pad(corrupted_crop, (0, pad_w, 0, pad_h))
-
+                corrupted_pad = F.pad(corrupted_crop, (left, right, top, bottom)) #(left, right, top, bottom)
 
                 with torch.no_grad():
                     pred = model(corrupted_pad)
 
                 mask_crop_np = mask_np[y0:y1, x0:x1]
-                # mask_crop_np = np.pad(mask_crop_np, [(0,pad_h), (0, pad_w)], mode="constant")
                 
                 expanded_mask = torch.from_numpy(mask_crop_np)\
                     .to(device)\
@@ -412,6 +496,12 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
                 region_pred = final_pred[:, :, y0:y1, x0:x1] # It updates final_pred and final_overlapping_mask with aliasing 
                 region_mask = final_overlapping_mask[:, :, y0:y1, x0:x1]
 
+                # fig, axs = plt.subplots(1,2, figsize=(15,10))
+                # axs=axs.ravel()
+                # axs[0].imshow(pred[0].permute(1,2,0).detach().cpu())
+                # prova = pred*0.5+expanded_mask*0.5
+                # axs[1].imshow(prova[0].permute(1,2,0).detach().cpu())
+                # plt.show()
                 region_pred += pred * expanded_mask
                 region_mask += expanded_mask.float()
                 
@@ -423,16 +513,15 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
                 # axs[0].imshow(img1[0].permute(1,2,0).detach().cpu())
                 # axs[1].imshow(img2[0].permute(1,2,0).detach().cpu())
                 # plt.show()
-    # =========================================================
-    # FINAL NORMALIZATION
-    # =========================================================
+
     final_pred = final_pred / torch.clamp(final_overlapping_mask, min=1.0)
 
-    holes_mask_3c = np.repeat(holes_mask, 3, axis=1)
-    holes_mask_t = torch.from_numpy(holes_mask_3c).to(device).bool()
-
-    final_pred[~holes_mask_t] = rgb_image[~holes_mask_t] # The areas of final_pred not masked in holes_mask_t are equal to the original image 
-
+    # final_pred, holes_mask_t = blend_borders(final_pred, rgb_image, holes_mask, device) 
+    final_pred, holes_mask_t = blend_borders(final_pred, rgb_image, holes_mask)
+        
+    holes_mask_t = holes_mask_t.expand(-1,3,-1,-1)
+    final_pred[holes_mask_t==0] = rgb_image[holes_mask_t==0] # The areas of final_pred not masked in holes_mask_t are equal to the original image 
+    
     final_pred[(text_ornament_mask == 0).expand(-1, 3, -1, -1)] = \
         rgb_image[(text_ornament_mask == 0).expand(-1, 3, -1, -1)] # The text and the ornaments are placed on the predicted area
 
@@ -441,7 +530,7 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
 pred_source = run_patchwise_inference(source, model, target, device, small_hole_size, patch_size=1024, one_shot=False)
 
 # PROBLEMS: 
-# * too small contiguity
+# * too small contiguity # SOLVED WITH blend_borders() function
 # * chessboard effect
 # * patterns are not perfectly aligned with the parchment
 

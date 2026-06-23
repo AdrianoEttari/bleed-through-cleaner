@@ -12,11 +12,8 @@ print("USING", device, " device")
 
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
-
-# snapshot_path=os.path.join(base_dir, "./snapshots/snapshot.pt")
-
 normalization = "group"
-loss_func_type = "vgg"
+loss_func_type = "vgg_strong"
 
 if normalization == "batch" and loss_func_type == "l1":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt") # ConvTranspose
@@ -107,13 +104,15 @@ with open(json_path, "r") as f:
     
 img_path = os.path.join(base_dir, images_with_and_without_bleed_through["yes"][15])
 
+# img_path = os.path.join(base_dir, "imgs_to_clean", "IT-FR0084_ams_0271_0052_pa_0048.jpg")
 
 models_folder = os.path.join(base_dir, "..", "models")
 
 def process_img(img_path, models_folder, device):
     cleaner = bleed_through_cleaner(img_path, models_folder, False, device)
     page_filtered_image, mask, _ = cleaner.bleed_through_finder(page_extraction_model_name='Residual_attention_UNet_page_extraction',
-                                ornament_model_name='Residual_attention_UNet_ornament_extraction',
+                                # ornament_model_name='Residual_attention_UNet_ornament_extraction',
+                                ornament_model_name=None,
                                 text_model_name='Residual_attention_UNet_text_extraction')
     img_mask_concat = np.concatenate([page_filtered_image, mask[:,:,None]], axis=2) 
     # rgb_image, mask, holes_mask = make_holes(img_mask_concat)
@@ -159,7 +158,11 @@ if source.shape[2] != patch_size or source.shape[3] != patch_size:
 import torchvision.transforms.functional as TF
 import cv2
 
-small_hole_size = 50
+small_hole_size = 100
+
+def plot_tensor_first_ch(tensor):
+    plt.imshow(tensor[0].permute(1,2,0).detach().cpu())
+    plt.show()
 
 def BigHole_2_SmallHoles(hole_mask,
                          small_hole_size=50,
@@ -210,6 +213,77 @@ def BigHole_2_SmallHoles(hole_mask,
     return small_masks
 
 def blend_borders(pred_img, orig_img, mask_of_holes, kernel_size=21):
+    """
+    Smoothly blend the boundary between inpainted regions and original image
+    using a soft transition band around the mask edges.
+
+    This function reduces visible seams between reconstructed (predicted)
+    regions and the original image by creating a narrow blending band along
+    the border of the masked (inpainted) areas. Within this band, pixel values
+    are averaged between the predicted image and the original image, producing
+    a smoother visual transition.
+
+    The blending band is obtained by eroding the binary mask and subtracting
+    the eroded version from the original mask, effectively isolating a thin
+    border region around each masked area.
+
+    Parameters
+    ----------
+    pred_img : torch.Tensor
+        Tensor of shape (1, C, H, W) representing the predicted/inpainted image.
+        This tensor is modified in-place within the blending band.
+
+    orig_img : torch.Tensor
+        Tensor of shape (1, C, H, W) representing the original image
+        (with holes or missing regions).
+
+    mask_of_holes : numpy.ndarray
+        Binary mask of shape (1, 1, H, W) or equivalent, where:
+            - Values > 0 indicate inpainted (hole) regions
+            - Values == 0 indicate original regions
+        The mask is converted internally to uint8.
+
+    kernel_size : int, optional (default=21)
+        Size of the elliptical structuring element used for erosion.
+        Controls the thickness of the blending band:
+            - Larger values → wider, smoother transition
+            - Smaller values → sharper boundary
+
+    Returns
+    -------
+    pred_img : torch.Tensor
+        Updated predicted image with border blending applied.
+        Blending is applied only within the transition band.
+
+    mask_of_holes_t : torch.Tensor
+        Torch tensor version of the input mask, moved to the same device.
+
+    Processing Steps
+    ----------------
+    1. Convert mask to a binary uint8 format.
+    2. Apply morphological erosion to shrink the mask.
+    3. Compute the blending band as:
+           blend_band = original_mask - eroded_mask
+       This isolates a thin border around the masked regions.
+    4. Expand the blending band to match the number of image channels.
+    5. In the blending band, replace pixel values with:
+           0.5 * pred_img + 0.5 * orig_img
+       creating a smooth transition between images.
+
+    Notes
+    -----
+    - This operation is local and lightweight compared to gradient-domain
+      blending (e.g., Poisson blending).
+    - Useful as a post-processing step after inpainting.
+    - The function modifies `pred_img` in-place.
+    - Assumes `pred_img` and `orig_img` are on the same device.
+
+    Limitations
+    -----------
+    - Performs simple linear blending; does not account for gradient consistency.
+    - May not fully remove seams in cases of strong color or illumination mismatch.
+    - Kernel size must be tuned depending on resolution and mask size.
+    """
     mask_of_holes = (mask_of_holes > 0).astype(np.uint8)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
     eroded = cv2.erode(mask_of_holes[0][0], kernel, iterations=1)
@@ -223,67 +297,108 @@ def blend_borders(pred_img, orig_img, mask_of_holes, kernel_size=21):
     pred_img[blend_band==1] = pred_img[blend_band==1]*0.5 + orig_img[blend_band==1]*0.5
     return pred_img, mask_of_holes_t
 
-# def match_low_freq(pred, orig, mask, kernel=51):
-#     """
-#     pred, orig: (B, 3, H, W)
-#     mask: either (H, W) or (B, 1, H, W)
-#     """
+def gradient_domain_blending(src, dst, mask):
 
-#     # --- ensure mask shape ---
-#     if isinstance(mask, torch.Tensor):
-#         mask_t = mask
-#     else:
-#         mask_t = torch.from_numpy(mask)
+    """
+    Perform gradient-domain (Poisson) blending of inpainted regions into an image
+    using OpenCV's seamlessClone, handling multiple disconnected areas independently.
 
-#     if mask_t.ndim == 2:
-#         mask_t = mask_t[None, None, ...]  # (1,1,H,W)
-#     elif mask_t.ndim == 3:
-#         mask_t = mask_t.unsqueeze(1)
+    This function blends the content of a source image (`src`) into a destination
+    image (`dst`) only within the regions specified by `mask`. It uses gradient-domain
+    (Poisson) blending to ensure seamless transitions, eliminating visible seams,
+    color discontinuities, and texture inconsistencies between inpainted and original areas.
 
-#     mask_t = mask_t.to(pred.device).float()
+    Unlike naive blending or direct pixel replacement, this method reconstructs pixel
+    values inside the masked regions by matching image gradients (edges and local
+    variations) from the source image while enforcing boundary continuity with the
+    destination image.
 
-#     # expand to 3 channels
-#     mask_t = mask_t.expand(-1, 3, -1, -1)
+    Parameters
+    ----------
+    src : torch.Tensor
+        Tensor of shape (1, C, H, W) representing the source image.
+        Typically contains the inpainted result (i.e., reconstructed areas).
+        Expected value range: [0, 1], RGB format.
 
-#     # --- low-frequency (blur) ---
-#     pad = kernel // 2
-#     pred_blur = F.avg_pool2d(pred, kernel, stride=1, padding=pad)
-#     orig_blur = F.avg_pool2d(orig, kernel, stride=1, padding=pad)
+    dst : torch.Tensor
+        Tensor of shape (1, C, H, W) representing the destination image.
+        Typically the original image with missing/corrupted regions.
+        Expected value range: [0, 1], RGB format.
+
+    mask : torch.Tensor
+        Tensor of shape (1, 1, H, W) or (1, C, H, W), where:
+            - Value 1 indicates regions to blend (inpainted areas)
+            - Value 0 indicates unchanged regions
+        The mask is converted internally to a single-channel uint8 image
+        with values {0, 255}.
+
+    Returns
+    -------
+    torch.Tensor
+        Output tensor of shape (1, C, H, W), representing the blended image.
+        Values are in [0, 1] range, RGB format.
+
+    Processing Steps
+    ----------------
+    1. Convert PyTorch tensors to NumPy arrays and scale to [0, 255].
+    2. Convert RGB → BGR format (required by OpenCV).
+    3. Extract a binary mask from the first channel.
+    4. Identify connected components in the mask to separate distinct regions.
+    5. For each region:
+        a. Compute its bounding box
+        b. Apply padding to include surrounding context
+        c. Crop corresponding regions from the source and mask
+        d. Compute the region center in the destination image
+        e. Perform seamless cloning using cv2.NORMAL_CLONE
+    6. Convert result back to RGB and normalize to [0, 1].
+    7. Convert NumPy array back to PyTorch tensor format.
+    """
+
+    src = src[0].permute(1,2,0).detach().cpu().numpy()
+    dst = dst[0].permute(1,2,0).detach().cpu().numpy()
+    mask = mask[0].permute(1,2,0).detach().cpu().numpy()
+    src = (src * 255).astype(np.uint8)
+    dst = (dst * 255).astype(np.uint8)
+    mask = (mask[:,:,0] * 255).astype(np.uint8)
+    src = cv2.cvtColor(src, cv2.COLOR_RGB2BGR)
+    dst = cv2.cvtColor(dst, cv2.COLOR_RGB2BGR)
     
-#     strength = 0.2  # try 0.3–0.7
-
-#     corrected = pred + (orig_blur - pred_blur) * mask_t * strength
-
-#     return corrected
-
-# def blend_borders(pred_img, orig_img, mask_of_holes, device, feather=25):
-#     pred_img_new = match_low_freq(pred_img, orig_img, mask_of_holes)
-#     if mask_of_holes.ndim == 2:
-#         mask = mask_of_holes[None, None, ...]
-#     elif mask_of_holes.ndim == 4:
-#         mask = mask_of_holes
-#     else:
-#         raise ValueError("Unexpected mask shape")
-
-#     mask_np = mask[0, 0].astype(np.uint8)
-
-#     # Distance from edge INSIDE the mask
-#     dist = cv2.distanceTransform(mask_np, cv2.DIST_L2, 5)
-
-#     # Normalize within feather region
-#     alpha_np = np.clip(dist / feather, 0, 1)
-
-#     # Smooth a bit to avoid harsh gradients
-#     alpha_np = cv2.GaussianBlur(alpha_np, (0, 0), sigmaX=feather/4)
-
-#     alpha = torch.from_numpy(alpha_np).float().to(device)[None, None, ...]
-#     alpha = alpha.expand(-1, 3, -1, -1)
-
-#     out = pred_img_new * alpha + orig_img * (1 - alpha)
-
-#     return out, torch.from_numpy(mask_np[None, None]).to(device)
-
+    num_labels, labels = cv2.connectedComponents(mask)
+    output = dst.copy()
     
+    for label in range(1, num_labels):
+        region_mask = (labels == label).astype(np.uint8)*255
+        ys, xs = np.where(region_mask > 0)
+        
+        y1, y2 = ys.min(), ys.max()
+        x1, x2 = xs.min(), xs.max()
+        
+        pad = 10
+        y1 = max(0, y1 - pad)
+        y2 = min(mask.shape[0], y2 + pad)
+        x1 = max(0, x1 - pad)
+        x2 = min(mask.shape[1], x2 + pad)
+        
+        src_crop = src[y1:y2, x1:x2]
+        mask_crop = region_mask[y1:y2, x1:x2]
+
+        center = ((x1 + x2) // 2, (y1 + y2) // 2)
+        output = cv2.seamlessClone(
+            src_crop, 
+            output, 
+            mask_crop, 
+            center, 
+            cv2.NORMAL_CLONE
+            # cv2.MIXED_CLONE
+        )
+        
+
+    output = cv2.cvtColor(output, cv2.COLOR_BGR2RGB)
+    output = output.astype(np.float32) / 255.0
+
+    output_torch = torch.from_numpy(output).permute(2,0,1).unsqueeze(0)
+    return output_torch
+
 def split_holes(holes_mask, connectivity=8):
     """
     holes_mask: [1,1,H,W] or [H,W], binary {0,1}
@@ -319,7 +434,6 @@ def split_holes(holes_mask, connectivity=8):
     return masks
 
 def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_size=512, one_shot=False):
-
     source = source.to(device)  # [1, 5, H, W]
     B, C, H, W = source.shape
 
@@ -404,9 +518,10 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
         # MULTI-HOLE MODE
         # =========================================================
         else:
-
             small_holes_masks = BigHole_2_SmallHoles(
-                hole_mask, small_hole_size=hole_size, overlap=10
+                # hole_mask, small_hole_size=hole_size, overlap=10
+                hole_mask, small_hole_size=hole_size, overlap=60
+                
             )
 
             for small_holes_mask in small_holes_masks:
@@ -516,12 +631,13 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
 
     final_pred = final_pred / torch.clamp(final_overlapping_mask, min=1.0)
 
-    # final_pred, holes_mask_t = blend_borders(final_pred, rgb_image, holes_mask, device) 
     final_pred, holes_mask_t = blend_borders(final_pred, rgb_image, holes_mask)
         
     holes_mask_t = holes_mask_t.expand(-1,3,-1,-1)
     final_pred[holes_mask_t==0] = rgb_image[holes_mask_t==0] # The areas of final_pred not masked in holes_mask_t are equal to the original image 
     
+    final_pred = gradient_domain_blending(final_pred, rgb_image, holes_mask_t)
+    final_pred = final_pred.to(device)
     final_pred[(text_ornament_mask == 0).expand(-1, 3, -1, -1)] = \
         rgb_image[(text_ornament_mask == 0).expand(-1, 3, -1, -1)] # The text and the ornaments are placed on the predicted area
 

@@ -133,7 +133,6 @@ class get_data(Dataset):
         image = np.array(Image.open(img_full_path))          # H x W x 4
         rgb, text_mask, holes_mask = make_holes(image, max_hole_size=self.max_hole_size)
 
-
         # Normalize FIRST
         rgb = normalize(rgb)
         rgb_corrupt = rgb.copy()
@@ -153,7 +152,6 @@ class get_data(Dataset):
             ],
             axis=2
         )
-
 
         return (
             torch.tensor(input_tensor).permute(2, 0, 1),

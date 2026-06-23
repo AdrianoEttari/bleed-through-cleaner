@@ -289,7 +289,11 @@ class bleed_through_cleaner:
             warnings.warn(f"The patch size for this picture has been changed from 400 to {patch_size} because of the shape of the image")
             
         aggregation_sampling = split_aggregation_sampling(img_lr=page_filtered_image_tensor, patch_size=patch_size, stride=stride, batch_size=batch_size, magnification_factor=1, device=self.device, multiple_gpus=False)
-        ornament_mask, ornament_GPU_time = self.ornament_detect(aggregation_sampling, ornament_model_name)
+        
+        if ornament_model_name is not None:
+            ornament_mask, ornament_GPU_time = self.ornament_detect(aggregation_sampling, ornament_model_name)
+        else:
+            ornament_GPU_time=0
 
         if 'HSV' in text_model_name:
             page_filtered_image = Image.fromarray(page_filtered_image).convert('HSV')
@@ -299,12 +303,27 @@ class bleed_through_cleaner:
             x_LAB = cv2.cvtColor(np.array(Image.fromarray(page_filtered_image)), cv2.COLOR_RGB2LAB)
             page_filtered_image = np.concatenate((x_LAB, x_HSV[:,:,2][:,:,None]), axis=2)
 
-        text_mask, text_GPU_time = self.text_detect(aggregation_sampling, text_model_name)
+        if text_model_name is not None:
+            text_mask, text_GPU_time = self.text_detect(aggregation_sampling, text_model_name)
+        else:
+            text_GPU_time=0
 
         FINAL_BLEED_THROUGH_MASK = np.zeros((page_filtered_image.shape[0], page_filtered_image.shape[1]))
-        FINAL_BLEED_THROUGH_MASK += ornament_mask
-        FINAL_BLEED_THROUGH_MASK += text_mask
-        FINAL_BLEED_THROUGH_MASK = np.clip(FINAL_BLEED_THROUGH_MASK-255, 0, 255).astype(np.uint8)
+        
+        if ornament_model_name is not None:
+            FINAL_BLEED_THROUGH_MASK += ornament_mask
+        else:
+            print("Not using ornament masking!!!")
+            
+        if text_model_name is not None:
+            FINAL_BLEED_THROUGH_MASK += text_mask
+        else:
+            print("Not using text masking!!!")
+            
+        if ornament_model_name is not None and text_model_name is not None:
+            FINAL_BLEED_THROUGH_MASK = np.clip(FINAL_BLEED_THROUGH_MASK-255, 0, 255).astype(np.uint8)
+        
+        FINAL_BLEED_THROUGH_MASK = FINAL_BLEED_THROUGH_MASK.astype(np.uint8)
 
         if 'HSV' in text_model_name:
             page_filtered_image_RGB = cv2.cvtColor(page_filtered_image, cv2.COLOR_HSV2RGB)

@@ -13,7 +13,7 @@ print("USING", device, " device")
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 normalization = "group"
-loss_func_type = "vgg_strong"
+loss_func_type = "vgg_strong05"
 
 if normalization == "batch" and loss_func_type == "l1":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt") # ConvTranspose
@@ -27,6 +27,8 @@ elif normalization == "group" and loss_func_type == "grad":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_grad.pt") # Upsample, Conv
 elif normalization == "group" and loss_func_type == "vgg_strong":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg_strong.pt") # Upsample, Conv
+elif normalization == "group" and loss_func_type == "vgg_strong05":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg_strong05.pt") # Upsample, Conv
 
 
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device, normalization=normalization).to(device)
@@ -41,7 +43,7 @@ print(f"Number of trained epochs: {epochs_run}")
 
 model.eval()
 
-#%% PROVA 1
+#%% INFERENCE ON THE TRANINING DATASET IMAGES
 # from utils_inpainting import get_data
 
 # dataset_path = os.path.join("dataset_MAGIC_PatchSize1024_partial")
@@ -111,8 +113,8 @@ models_folder = os.path.join(base_dir, "..", "models")
 def process_img(img_path, models_folder, device):
     cleaner = bleed_through_cleaner(img_path, models_folder, False, device)
     page_filtered_image, mask, _ = cleaner.bleed_through_finder(page_extraction_model_name='Residual_attention_UNet_page_extraction',
-                                # ornament_model_name='Residual_attention_UNet_ornament_extraction',
-                                ornament_model_name=None,
+                                ornament_model_name='Residual_attention_UNet_ornament_extraction',
+                                # ornament_model_name=None,
                                 text_model_name='Residual_attention_UNet_text_extraction')
     img_mask_concat = np.concatenate([page_filtered_image, mask[:,:,None]], axis=2) 
     # rgb_image, mask, holes_mask = make_holes(img_mask_concat)
@@ -166,7 +168,7 @@ def plot_tensor_first_ch(tensor):
 
 def BigHole_2_SmallHoles(hole_mask,
                          small_hole_size=50,
-                         overlap=10):
+                         overlap_perc=25):
 
     """
     Take as input a big binary image with 0 values for the non masked areas and 1 values for the masked areas.
@@ -185,7 +187,19 @@ def BigHole_2_SmallHoles(hole_mask,
     y_min, x_min = coords.min(axis=0)
     y_max, x_max = coords.max(axis=0) + 1
 
+    # x_dist = x_max-x_min
+    # y_dist = y_max-y_min
+    
+    # if x_dist < 100 or y_dist < 100:
+    #     overlap = int(min(x_dist, y_dist) * overlap_perc/100)
+    #     stride = min(x_dist, y_dist) - overlap
+    # else:
+    #     overlap = int(small_hole_size * overlap_perc/100)
+    #     stride = small_hole_size - overlap
+    
+    overlap = int(small_hole_size * overlap_perc/100)
     stride = small_hole_size - overlap
+    
 
     if stride <= 0:
         raise ValueError("overlap must be smaller than patch size")
@@ -209,6 +223,10 @@ def BigHole_2_SmallHoles(hole_mask,
                 small_mask[y:end_y, x:end_x] = patch
 
                 small_masks.append(small_mask)
+            if end_x == x_max and end_y == y_max:
+                break
+        if end_x == x_max and end_y == y_max:
+            break 
 
     return small_masks
 
@@ -519,9 +537,8 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
         # =========================================================
         else:
             small_holes_masks = BigHole_2_SmallHoles(
-                # hole_mask, small_hole_size=hole_size, overlap=10
-                hole_mask, small_hole_size=hole_size, overlap=60
-                
+                # hole_mask, small_hole_size=hole_size, overlap_perc=10
+                hole_mask, small_hole_size=hole_size, overlap_perc=60     
             )
 
             for small_holes_mask in small_holes_masks:

@@ -13,7 +13,7 @@ print("USING", device, " device")
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 normalization = "group"
-loss_func_type = "vgg_strong05"
+loss_func_type = "vgg_dominant"
 
 if normalization == "batch" and loss_func_type == "l1":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024.pt") # ConvTranspose
@@ -29,6 +29,8 @@ elif normalization == "group" and loss_func_type == "vgg_strong":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg_strong.pt") # Upsample, Conv
 elif normalization == "group" and loss_func_type == "vgg_strong05":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg_strong05.pt") # Upsample, Conv
+elif normalization == "group" and loss_func_type == "vgg_dominant":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg_dominant.pt") # Upsample, Conv
 
 
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device, normalization=normalization).to(device)
@@ -663,9 +665,9 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
 pred_source = run_patchwise_inference(source, model, target, device, small_hole_size, patch_size=1024, one_shot=False)
 
 # PROBLEMS: 
-# * too small contiguity # SOLVED WITH blend_borders() function
-# * chessboard effect
-# * patterns are not perfectly aligned with the parchment
+# * too small contiguity # SOLVED with blend_borders() and gradient_domain_blending() functions
+# * chessboard effect # SOLVED with overlapping patches and averaging the overlapping parts
+# * patterns are not perfectly aligned with the parchment # SOLVED with strong vgg loss and gradient_domain_blending() function
 
 #%% SHOW RESULTS
 rgb_corrupt = source[:, :3, :, :]

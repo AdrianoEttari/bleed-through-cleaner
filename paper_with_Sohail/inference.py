@@ -106,7 +106,7 @@ json_path = os.path.join(base_dir, "images_with_and_without_bleed_through.json")
 with open(json_path, "r") as f:
     images_with_and_without_bleed_through = json.load(f)
     
-img_path = os.path.join(base_dir, images_with_and_without_bleed_through["yes"][15])
+img_path = os.path.join(base_dir, images_with_and_without_bleed_through["yes"][10])
 
 # img_path = os.path.join(base_dir, "imgs_to_clean", "IT-FR0084_ams_0271_0052_pa_0048.jpg")
 

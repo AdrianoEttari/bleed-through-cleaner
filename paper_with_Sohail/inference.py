@@ -106,9 +106,11 @@ json_path = os.path.join(base_dir, "images_with_and_without_bleed_through.json")
 with open(json_path, "r") as f:
     images_with_and_without_bleed_through = json.load(f)
     
-img_path = os.path.join(base_dir, images_with_and_without_bleed_through["yes"][10])
+img_path = os.path.join(base_dir, images_with_and_without_bleed_through["yes"][5])
 
-# img_path = os.path.join(base_dir, "imgs_to_clean", "IT-FR0084_ams_0271_0052_pa_0048.jpg")
+img_path = os.path.join(base_dir, "imgs_to_clean", "IT-FR0084_ams_0271_0052_pa_0048.jpg")
+
+# img_path = os.path.join("..", "Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", "CNMD0000263308_0042_Carta_18v.jpg")
 
 models_folder = os.path.join(base_dir, "..", "models")
 
@@ -663,6 +665,11 @@ def run_patchwise_inference(source, model, rgb_image, device, hole_size, patch_s
     return final_pred
 
 pred_source = run_patchwise_inference(source, model, target, device, small_hole_size, patch_size=1024, one_shot=False)
+
+# img = pred_source[0].permute(1, 2, 0).detach().cpu().numpy()
+# img = (img * 255).clip(0, 255).astype(np.uint8)
+# from PIL import Image
+# Image.fromarray(img).save("img_cleaned.png")
 
 # PROBLEMS: 
 # * too small contiguity # SOLVED with blend_borders() and gradient_domain_blending() functions

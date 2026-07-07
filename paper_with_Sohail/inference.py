@@ -31,6 +31,8 @@ elif normalization == "group" and loss_func_type == "vgg_strong05":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg_strong05.pt") # Upsample, Conv
 elif normalization == "group" and loss_func_type == "vgg_dominant":
     snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg_dominant.pt") # Upsample, Conv
+elif normalization == "group" and loss_func_type == "vgg_only":
+    snapshot_path = os.path.join(base_dir, "snapshots", "snapshot_PathSize_1024_Norm_group_Loss_vgg_ONLY.pt") # Upsample, Conv
 
 
 model=ResidualUNet(in_channels=3, out_channels=3, channels=(32, 64, 128, 256), device=device, normalization=normalization).to(device)
@@ -106,9 +108,9 @@ json_path = os.path.join(base_dir, "images_with_and_without_bleed_through.json")
 with open(json_path, "r") as f:
     images_with_and_without_bleed_through = json.load(f)
     
-img_path = os.path.join(base_dir, images_with_and_without_bleed_through["yes"][5])
+img_path = os.path.join(base_dir, images_with_and_without_bleed_through["yes"][25])
 
-img_path = os.path.join(base_dir, "imgs_to_clean", "IT-FR0084_ams_0271_0052_pa_0048.jpg")
+# img_path = os.path.join(base_dir, "imgs_to_clean", "IT-FR0084_ams_0271_0052_pa_0048.jpg")
 
 # img_path = os.path.join("..", "Napoli_Biblioteca_dei_Girolamini_CF_2_16_Filippino", "CNMD0000263308_0042_Carta_18v.jpg")
 

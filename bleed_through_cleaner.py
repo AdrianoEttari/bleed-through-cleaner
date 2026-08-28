@@ -976,7 +976,7 @@ if __name__ == "__main__":
     ##### FOLDER WITH THE IMAGES TO CLEAN #####
     # folder_data_path = os.path.join("books","5d41_sannazaro_le_rime")
     # folder_data_path = "TO_REMOVE"
-    folder_data_path = os.path.join("IMPROVE_TEXT_4TRANSCRIBUS","Copiadispacci_166_ORIGINAL_JPG")
+    folder_data_path = os.path.join("per_Marco")
 
     ##### TO USE IN GENERAL #####
     ornament_model_name = "Residual_attention_UNet_ornament_extraction"

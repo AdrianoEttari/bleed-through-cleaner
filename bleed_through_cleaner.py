@@ -989,11 +989,11 @@ if __name__ == "__main__":
     # text_model_name = "Residual_attention_UNet_text_extraction_finetuning"
 
     manuscript_cleaning_and_timing_NLM(folder_data_path, 
-                                    save_mask=False,
+                                    save_mask=True,
                                         ornament_model_name=ornament_model_name,
                                         text_model_name = text_model_name,
                                         page_extraction_model_name = page_extraction_model_name,
-                                        NLM_strong=False,
+                                        NLM_strong=True,
                                         GPU_timing=False)
 
     # manuscript_cleaning_and_timing_biweight(folder_data_path, 
